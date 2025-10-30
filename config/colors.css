@@ -1,0 +1,11 @@
+:root {
+  --main-bg: #0f2027;
+  --main-gradient: linear-gradient(120deg, #0f2027, #2c5364, #00c6ff, #0072ff);
+  --main-color: #00c6ff;
+  --accent-color: #fff200;
+  --text-color: #222;
+  --sidebar-bg: #222b45;
+  --sidebar-active: #00c6ff;
+  --card-bg: #fff;
+  --card-shadow: 0 2px 8px #00c6ff22;
+}

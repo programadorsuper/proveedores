@@ -1,0 +1,168 @@
+{
+"proveedores_menu": [
+	{
+		"id" : 1,
+		"nombre" : "SELL IN, OUT",
+		"icon" : "fa-solid fa-chart-pie-simple-circle-dollar",
+		"section" : "sellinout",
+		"type" : null,
+		"action" : null,
+		"parent_id" : null,
+		"propiedad" : 1,
+		"activo" : 0
+	},
+	{
+		"id" : 2,
+		"nombre" : "VENTAS",
+		"icon" : "fa-solid fa-money-bill-trend-up",
+		"section" : "ventas",
+		"type" : null,
+		"action" : null,
+		"parent_id" : null,
+		"propiedad" : 2,
+		"activo" : 1
+	},
+	{
+		"id" : 3,
+		"nombre" : "Ordenes",
+		"icon" : "fa-solid fa-memo-circle-check",
+		"section" : "ordenes",
+		"type" : null,
+		"action" : null,
+		"parent_id" : null,
+		"propiedad" : 2,
+		"activo" : 1
+	},
+	{
+		"id" : 4,
+		"nombre" : "Ordenes nuevas",
+		"icon" : "",
+		"section" : "ordenes",
+		"type" : "news",
+		"action" : null,
+		"parent_id" : 3,
+		"propiedad" : 1,
+		"activo" : 1
+	},
+	{
+		"id" : 5,
+		"nombre" : "Backorders",
+		"icon" : "",
+		"section" : "ordenes",
+		"type" : "backorders",
+		"action" : null,
+		"parent_id" : 3,
+		"propiedad" : 1,
+		"activo" : 1
+	},
+	{
+		"id" : 6,
+		"nombre" : "Otros",
+		"icon" : "fa-solid fa-dice-d20",
+		"section" : "otros",
+		"type" : null,
+		"action" : null,
+		"parent_id" : null,
+		"propiedad" : 2,
+		"activo" : 1
+	},
+	{
+		"id" : 7,
+		"nombre" : "Devolución",
+		"icon" : "",
+		"section" : "otros",
+		"type" : "devolucion",
+		"action" : null,
+		"parent_id" : 6,
+		"propiedad" : 1,
+		"activo" : 1
+	},
+	{
+		"id" : 8,
+		"nombre" : "Inventario",
+		"icon" : "",
+		"section" : "otros",
+		"type" : "inventario",
+		"action" : null,
+		"parent_id" : 6,
+		"propiedad" : 1,
+		"activo" : 1
+	},
+	{
+		"id" : 9,
+		"nombre" : "Usuarios",
+		"icon" : "fa-solid fa-users",
+		"section" : "users",
+		"type" : null,
+		"action" : null,
+		"parent_id" : null,
+		"propiedad" : 1,
+		"activo" : 1
+	},
+	{
+		"id" : 10,
+		"nombre" : "Ordenes de compra con entradas",
+		"icon" : "",
+		"section" : "ordenes",
+		"type" : "views_entradas",
+		"action" : null,
+		"parent_id" : 3,
+		"propiedad" : 1,
+		"activo" : 1
+	},
+	{
+		"id" : 12,
+		"nombre" : "Periodos",
+		"icon" : "",
+		"section" : "ventas",
+		"type" : "periodos",
+		"action" : null,
+		"parent_id" : 2,
+		"propiedad" : 1,
+		"activo" : 1
+	},
+	{
+		"id" : 13,
+		"nombre" : "Sell-Out",
+		"icon" : "",
+		"section" : "ventas",
+		"type" : "sellout",
+		"action" : null,
+		"parent_id" : 2,
+		"propiedad" : 1,
+		"activo" : 1
+	},
+	{
+		"id" : 14,
+		"nombre" : "Compras",
+		"icon" : "fa-solid fa-bag-shopping",
+		"section" : "compras",
+		"type" : null,
+		"action" : null,
+		"parent_id" : null,
+		"propiedad" : 2,
+		"activo" : 1
+	},
+	{
+		"id" : 15,
+		"nombre" : "Periodos",
+		"icon" : "",
+		"section" : "compras",
+		"type" : "periodos",
+		"action" : null,
+		"parent_id" : 14,
+		"propiedad" : 1,
+		"activo" : 1
+	},
+	{
+		"id" : 16,
+		"nombre" : "Sell-In",
+		"icon" : "",
+		"section" : "compras",
+		"type" : "sellin",
+		"action" : null,
+		"parent_id" : 14,
+		"propiedad" : 1,
+		"activo" : 1
+	}
+]}

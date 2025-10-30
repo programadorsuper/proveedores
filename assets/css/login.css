@@ -1,0 +1,106 @@
+/* ===== Loader ===== */
+.page-loader {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 15, 36, 0.95);
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  transition: opacity 260ms ease, visibility 260ms ease;
+}
+.page-loader.is-hidden { opacity: 0; visibility: hidden; }
+
+.loader-pulse {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1E88E5, #49a6ff 70%);
+  box-shadow: 0 0 0 0 rgba(47, 143, 255, 0.5);
+  animation: loaderPulse 1.8s infinite;
+  position: relative;
+}
+.loader-pulse::after {
+  content: "";
+  position: absolute;
+  inset: 16px;
+  border-radius: 50%;
+  background: rgba(7, 18, 42, 0.85);
+  box-shadow: inset 0 0 18px rgba(5, 12, 32, 0.8);
+}
+.loader-text {
+  font-size: 0.95rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #8892B0;
+}
+
+/* ===== Botón con ripple ===== */
+.btn-submit { --ripple-x: 50%; --ripple-y: 50%; }
+.btn-ripple {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at var(--ripple-x) var(--ripple-y), rgba(255,255,255,0.45), transparent 60%);
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 380ms ease, transform 380ms ease;
+  pointer-events: none;
+}
+.btn-submit.is-pressed .btn-ripple { opacity: 0.6; transform: scale(1.7); }
+.btn-submit.is-loading { cursor: progress; opacity: .75; pointer-events: none; }
+
+/* ===== Hero decorativo (flores + burbujas) ===== */
+.bubble {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(30, 136, 229, 0.3);
+  animation: float 25s infinite ease-in-out;
+  filter: blur(25px);
+}
+.bubble:nth-child(1) { width:120px; height:120px; left:10%; animation-duration:28s; animation-delay:0s; }
+.bubble:nth-child(2) { width:180px; height:180px; left:25%; animation-duration:35s; animation-delay:2s; }
+.bubble:nth-child(3) { width:90px;  height:90px;  left:50%; animation-duration:22s; animation-delay:1s; }
+.bubble:nth-child(4) { width:220px; height:220px; left:70%; animation-duration:48s; animation-delay:5s; }
+.bubble:nth-child(5) { width:140px; height:140px; left:85%; animation-duration:29s; animation-delay:3s; }
+.bubble:nth-child(6) { width:80px;  height:80px;  top:80%; left:15%; animation-duration:33s; animation-delay:6s; }
+.bubble:nth-child(7) { width:280px; height:280px; top:60%; left:40%; animation-duration:42s; animation-delay:1s; }
+
+.super-flower { position: absolute; opacity: 0.15; filter: blur(10px); mix-blend-mode: screen; transform-origin: center center; }
+.flower-1 {
+  width: 500px; height: 500px; top: -100px; left: -150px;
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path fill="%231E88E5" d="M50,0 C77.6,0 100,22.4 100,50 C100,77.6 77.6,100 50,100 C22.4,100 0,77.6 0,50 C0,22.4 22.4,0 50,0 Z" transform-origin="50 50" transform="translate(15, 5) scale(0.6) rotate(15)"/><path fill="%230D47A1" d="M50,0 C77.6,0 100,22.4 100,50 C100,77.6 77.6,100 50,100 C22.4,100 0,77.6 0,50 C0,22.4 22.4,0 50,0 Z" transform-origin="50 50" transform="translate(60, 30) scale(0.4) rotate(-30)"/><path fill="%2342A5F5" d="M50,0 C77.6,0 100,22.4 100,50 C100,77.6 77.6,100 50,100 C22.4,100 0,77.6 0,50 C0,22.4 22.4,0 50,0 Z" transform-origin="50 50" transform="translate(20, 65) scale(0.5) rotate(45)"/></svg>');
+  animation: rotate-flower 70s linear infinite;
+}
+.flower-2 {
+  width: 700px; height: 700px; bottom: -200px; right: -250px;
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path fill="%231565C0" d="M50 0 C77.6 0 100 22.4 100 50 C100 77.6 77.6 100 50 100 C22.4 100 0 77.6 0 50 C0 22.4 22.4 0 50 0 Z" transform="translate(50, 50) rotate(60) scale(0.7)"/><path fill="%231976D2" d="M50 0 C77.6 0 100 22.4 100 50 C100 77.6 77.6 100 50 100 C22.4 100 0 77.6 0 50 C0 22.4 22.4 0 50 0 Z" transform="translate(15, 25) rotate(-45) scale(0.5)"/><path fill="%23039BE5" d="M50 0 C77.6 0 100 22.4 100 50 C100 77.6 77.6 100 50 100 C22.4 100 0 77.6 0 50 C0 22.4 22.4 0 50 0 Z" transform="translate(75, 65) rotate(30) scale(0.6)"/></svg>');
+  animation: rotate-flower 90s linear infinite reverse;
+}
+
+/* ===== Keyframes ===== */
+@keyframes loaderPulse {
+  0% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(47, 143, 255, 0.5); }
+  50% { transform: scale(1.05); box-shadow: 0 0 0 20px rgba(47, 143, 255, 0); }
+  100% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(47, 143, 255, 0); }
+}
+@keyframes float {
+  0% { transform: translateY(0) rotate(0deg) scale(1); }
+  50% { transform: translateY(-80vh) rotate(180deg) scale(1.2); }
+  100% { transform: translateY(0) rotate(360deg) scale(1); }
+}
+@keyframes rotate-flower {
+  from { transform: rotate(0deg) scale(1); }
+  50%  { transform: rotate(180deg) scale(1.1); }
+  to   { transform: rotate(360deg) scale(1); }
+}
+
+/* ===== Accesibilidad / motion ===== */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
