@@ -10,6 +10,11 @@ return [
     'session' => [
         'name' => 'proveedores_session',
     ],
+    'auth' => [
+        'remember_cookie' => 'proveedores_remember',
+        'remember_lifetime_seconds' => 60 * 60 * 24 * 15, // 15 dias
+        'session_check_ttl' => 0, // 0 = validar en cada peticion
+    ],
     'assets' => [
         'css' => '/proveedores_mvc/assets/css',
         'js' => '/proveedores_mvc/assets/js',

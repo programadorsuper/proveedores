@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/../core/BaseController.php';
 require_once __DIR__ . '/../core/Database.php';
+require_once __DIR__ . '/../core/AuthManager.php';
 require_once __DIR__ . '/../models/Proveedor.php';
 
 class LoginController extends BaseController
@@ -21,14 +22,7 @@ class LoginController extends BaseController
             $this->basePath = $this->baseUrl;
         }
 
-        $sessionName = $this->config['session']['name'] ?? $this->config['session_name'] ?? null;
-        if ($sessionName && session_status() === PHP_SESSION_NONE) {
-            session_name($sessionName);
-        }
-
-        if (session_status() === PHP_SESSION_NONE) {
-            session_start();
-        }
+        AuthManager::boot();
     }
 
     public function index(): void
@@ -65,11 +59,7 @@ class LoginController extends BaseController
 
     public function logout(): void
     {
-        if (session_status() === PHP_SESSION_NONE) {
-            session_start();
-        }
-
-        unset($_SESSION['auth_user']);
+        AuthManager::logout();
         $_SESSION['auth_status'] = 'Sesion finalizada correctamente.';
 
         $target = $this->basePath !== '' ? $this->basePath . '/login' : '/login';
@@ -81,6 +71,7 @@ class LoginController extends BaseController
     {
         $username = trim($_POST['username'] ?? $_POST['user'] ?? '');
         $password = (string)($_POST['password'] ?? '');
+        $remember = isset($_POST['remember_me']) && in_array((string)$_POST['remember_me'], ['1', 'on', 'true'], true);
 
         if ($username === '' || $password === '') {
             $message = 'Debes capturar usuario y contrasena.';
@@ -95,7 +86,7 @@ class LoginController extends BaseController
         $user = $model->login($username, $password);
 
         if ($user) {
-            $_SESSION['auth_user'] = $user;
+            AuthManager::login($user, $remember);
             $model->recordLogin($user['id'], $this->getIpAddress(), $_SERVER['HTTP_USER_AGENT'] ?? '');
 
             if ($isAjax) {
@@ -145,7 +136,7 @@ class LoginController extends BaseController
 
     protected function isAuthenticated(): bool
     {
-        return !empty($_SESSION['auth_user']);
+        return AuthManager::check();
     }
 
     protected function getIpAddress(): string

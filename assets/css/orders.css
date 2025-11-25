@@ -1,0 +1,28 @@
+.orders-status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.orders-status-pill.seen-self {
+    background-color: rgba(16, 185, 129, 0.15);
+    color: #0f5132;
+}
+
+.orders-status-pill.seen-other {
+    background-color: rgba(251, 191, 36, 0.2);
+    color: #7a4e00;
+}
+
+.orders-status-pill.not-seen {
+    background-color: rgba(248, 113, 113, 0.2);
+    color: #991b1b;
+}
+
+.orders-table-actions .dropdown-menu {
+    min-width: 220px;
+}

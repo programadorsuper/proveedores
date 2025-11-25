@@ -1,197 +1,203 @@
 <?php
 
-class Tickets
+/**
+ * Administra conexiones PDO reutilizables para Postgres y Firebird.
+ */
+class Database
 {
-    protected \PDO $db;
+    protected static array $config = [];
+    protected static array $connections = [];
 
-    public function __construct()
+    /**
+     * Obtiene una conexión PDO, reutilizando instancias existentes.
+     */
+    public static function connection(?string $name = null): PDO
     {
-        $this->db = Database::pgsql();
-    }
+        self::loadConfig();
 
-    public function search(int $providerId, array $filters = []): array
-    {
-        $query = strtolower(trim((string)($filters['query'] ?? '')));
-        $limit = min(200, max(1, (int)($filters['limit'] ?? 100)));
-        [$startDate, $endDate] = $this->resolveDateRange($filters);
+        $name = $name ?: (self::$config['default'] ?? 'pgsql');
 
-        $sql = "
-            SELECT
-                t.ticket_id,
-                t.ticket_date,
-                t.series,
-                t.folio,
-                t.store_id,
-                t.customer_id,
-                t.net_sales,
-                tr.status,
-                tr.reviewed_at,
-                COALESCE(tp.total_points, 0) AS total_points
-            FROM proveedores.vw_tickets t
-            LEFT JOIN proveedores.ticket_reviews tr
-                ON tr.provider_id = t.provider_id
-               AND tr.ticket_id = t.ticket_id
-            LEFT JOIN LATERAL (
-                SELECT SUM(points) AS total_points
-                FROM proveedores.ticket_points
-                WHERE provider_id = t.provider_id
-                  AND ticket_id = t.ticket_id
-            ) tp ON TRUE
-            WHERE t.provider_id = :pid
-              AND t.ticket_date BETWEEN :start AND :end
-              AND (
-                    :query = ''
-                 OR  t.series ILIKE :like
-                 OR CAST(t.folio AS TEXT) ILIKE :like
-                 OR CAST(t.ticket_id AS TEXT) ILIKE :like
-              )
-            ORDER BY t.ticket_date DESC
-            LIMIT :limit
-        ";
-
-        $stmt = $this->db->prepare($sql);
-        $stmt->bindValue('pid', $providerId, \PDO::PARAM_INT);
-        $stmt->bindValue('start', $startDate->format('Y-m-d 00:00:00'));
-        $stmt->bindValue('end', $endDate->format('Y-m-d 23:59:59'));
-        $stmt->bindValue('query', $query);
-        $stmt->bindValue('like', '%' . $query . '%');
-        $stmt->bindValue('limit', $limit, \PDO::PARAM_INT);
-        $stmt->execute();
-
-        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
-    }
-
-    public function detail(int $providerId, int $ticketId): ?array
-    {
-        $headerSql = "
-            SELECT t.*, tr.status, tr.reviewed_at, tr.notes,
-                   COALESCE(tp.total_points, 0) AS total_points
-            FROM proveedores.vw_tickets t
-            LEFT JOIN proveedores.ticket_reviews tr
-              ON tr.provider_id = t.provider_id
-             AND tr.ticket_id = t.ticket_id
-            LEFT JOIN LATERAL (
-                SELECT SUM(points) AS total_points
-                FROM proveedores.ticket_points
-                WHERE provider_id = t.provider_id
-                  AND ticket_id = t.ticket_id
-            ) tp ON TRUE
-            WHERE t.provider_id = :pid
-              AND t.ticket_id = :ticket
-            LIMIT 1
-        ";
-
-        $stmt = $this->db->prepare($headerSql);
-        $stmt->execute([
-            'pid' => $providerId,
-            'ticket' => $ticketId,
-        ]);
-        $header = $stmt->fetch(\PDO::FETCH_ASSOC);
-        if (!$header) {
-            return null;
+        if (isset(self::$connections[$name]) && self::$connections[$name] instanceof PDO) {
+            return self::$connections[$name];
         }
 
-        $itemsSql = "
-            SELECT product_id, sku, name, qty, price, total, cost
-            FROM proveedores.vw_ticket_items
-            WHERE provider_id = :pid
-              AND ticket_id = :ticket
-            ORDER BY name ASC
-        ";
+        $connections = self::$config['connections'] ?? [];
 
-        $stmt = $this->db->prepare($itemsSql);
-        $stmt->execute([
-            'pid' => $providerId,
-            'ticket' => $ticketId,
-        ]);
-        $items = $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
-
-        $header['items'] = $items;
-        return $header;
-    }
-
-    public function markReviewed(int $providerId, int $userId, int $ticketId, string $status, ?string $notes = null): void
-    {
-        $sql = "
-            INSERT INTO proveedores.ticket_reviews (provider_id, user_id, ticket_id, status, notes, reviewed_at)
-            VALUES (:pid, :uid, :ticket, :status, :notes, NOW())
-            ON CONFLICT (provider_id, ticket_id)
-            DO UPDATE SET
-                user_id = EXCLUDED.user_id,
-                status = EXCLUDED.status,
-                notes = EXCLUDED.notes,
-                reviewed_at = NOW()
-        ";
-
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute([
-            'pid' => $providerId,
-            'uid' => $userId,
-            'ticket' => $ticketId,
-            'status' => $status,
-            'notes' => $notes,
-        ]);
-
-        $this->logActivity($providerId, $userId, 'ticket_review', [
-            'ticket_id' => $ticketId,
-            'status' => $status,
-        ]);
-    }
-
-    public function addPoints(int $providerId, int $userId, int $ticketId, float $points, ?string $reason = null): void
-    {
-        $sql = "
-            INSERT INTO proveedores.ticket_points (provider_id, ticket_id, points, reason, created_at)
-            VALUES (:pid, :ticket, :points, :reason, NOW())
-        ";
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute([
-            'pid' => $providerId,
-            'ticket' => $ticketId,
-            'points' => $points,
-            'reason' => $reason,
-        ]);
-
-        $this->logActivity($providerId, $userId, 'ticket_points', [
-            'ticket_id' => $ticketId,
-            'points' => $points,
-            'reason' => $reason,
-        ]);
-    }
-
-    protected function resolveDateRange(array $filters): array
-    {
-        $end = isset($filters['end_date']) ? new \DateTimeImmutable((string)$filters['end_date']) : new \DateTimeImmutable('today');
-        $start = isset($filters['start_date']) ? new \DateTimeImmutable((string)$filters['start_date']) : $end->modify('-90 days');
-
-        $limit = $end->modify('-5 years');
-        if ($start < $limit) {
-            $start = $limit;
+        if (!isset($connections[$name])) {
+            throw new RuntimeException("Conexión '{$name}' no configurada en config/database.php");
         }
 
-        if ($start > $end) {
-            [$start, $end] = [$end, $start];
+        $settings = $connections[$name];
+        $driver   = $settings['driver'] ?? 'pgsql';
+
+        switch ($driver) {
+            case 'pgsql':
+                $pdo = self::createPostgresConnection($settings);
+                break;
+
+            case 'firebird':
+                $pdo = self::createFirebirdConnection($settings);
+                break;
+
+            default:
+                throw new RuntimeException("Driver '{$driver}' no soportado");
         }
 
-        return [$start, $end];
+        self::$connections[$name] = $pdo;
+        return $pdo;
     }
 
-    protected function logActivity(int $providerId, int $userId, string $action, array $context = []): void
+    public static function pgsql(): PDO
     {
+        return self::connection('pgsql');
+    }
+
+    public static function firebird(): PDO
+    {
+        return self::connection('firebird');
+    }
+
+    /**
+     * Crea una conexión PDO a PostgreSQL con soporte SSL y search_path.
+     */
+    protected static function createPostgresConnection(array $settings): PDO
+    {
+        $host     = $settings['host']     ?? '127.0.0.1';
+        $port     = $settings['port']     ?? '5432';
+        $database = $settings['database'] ?? '';
+        $username = $settings['username'] ?? '';
+        $password = $settings['password'] ?? '';
+        $schema   = $settings['schema']   ?? 'public';
+        $sslmode  = $settings['sslmode']  ?? 'disable';
+        $timeout  = $settings['connect_timeout'] ?? 5;
+        $appName  = $settings['app_name'] ?? 'proveedores_mvc';
+        $search   = $settings['search_path'] ?? "{$schema}, public";
+
+        $dsn = sprintf(
+            'pgsql:host=%s;port=%s;dbname=%s;sslmode=%s;connect_timeout=%d',
+            $host,
+            $port,
+            $database,
+            $sslmode,
+            $timeout
+        );
+
+        $options = $settings['options'] ?? [];
+
         try {
-            $sql = "
-                INSERT INTO proveedores.user_activity_logs (provider_id, actor_user_id, action, context, created_at)
-                VALUES (:pid, :uid, :action, :context, NOW())
-            ";
-            $stmt = $this->db->prepare($sql);
-            $stmt->execute([
-                'pid' => $providerId,
-                'uid' => $userId,
-                'action' => $action,
-                'context' => json_encode($context, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
-            ]);
-        } catch (\Throwable $exception) {
-            error_log('[Tickets] Error registrando actividad: ' . $exception->getMessage());
+            $pdo = new PDO($dsn, $username, $password, $options);
+
+            // Asignar application_name y search_path
+            $safeApp = str_replace("'", "''", $appName);
+            $pdo->exec("SET application_name TO '{$safeApp}'");
+            $pdo->exec("SET search_path TO {$search}");
+
+            return $pdo;
+        } catch (PDOException $exception) {
+            $message = sprintf(
+                'No fue posible conectar a PostgreSQL (%s:%s / BD:%s / sslmode:%s). Detalle: %s',
+                $host,
+                $port,
+                $database,
+                $sslmode,
+                $exception->getMessage()
+            );
+            throw new RuntimeException($message, (int)$exception->getCode(), $exception);
         }
+    }
+
+    /**
+     * Crea una conexión PDO a Firebird.
+     *
+     * Soporta:
+     *  - Config por host/port/database/charset (recomendada).
+     *  - O bien un DSN fijo en $settings['dsn'].
+     */
+    protected static function createFirebirdConnection(array $settings): PDO
+    {
+        // Si se define un DSN manual, lo usamos tal cual.
+        if (!empty($settings['dsn'])) {
+            $dsn      = $settings['dsn'];
+            $username = $settings['username'] ?? ($settings['user'] ?? 'SYSDBA');
+            $password = $settings['password'] ?? ($settings['pass'] ?? 'masterkey');
+        } else {
+            $host     = $settings['host']     ?? '127.0.0.1';
+            $port     = $settings['port']     ?? '3050';
+            $database = $settings['database'] ?? '';
+            $charset  = $settings['charset']  ?? 'UTF8';
+
+            $username = $settings['username'] ?? 'SYSDBA';
+            $password = $settings['password'] ?? 'masterkey';
+
+            // Formato recomendado: host/port:database
+            // Ej: firebird:dbname=192.168.1.15/3050:/home/papelera/papelera.fdb;charset=UTF8
+            $dsn = sprintf(
+                'firebird:dbname=%s/%s:%s;charset=%s',
+                $host,
+                $port,
+                $database,
+                $charset
+            );
+        }
+
+        $role    = $settings['role']    ?? null;
+        $dialect = (int)($settings['dialect'] ?? 3);
+
+        $options = $settings['options'] ?? [];
+        if (empty($options)) {
+            $options = [
+                PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_PERSISTENT         => false,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            ];
+        }
+
+        try {
+            $pdo = new PDO($dsn, $username, $password, $options);
+        } catch (PDOException $exception) {
+            // Para el mensaje, intentamos mostrar host/BD si existen,
+            // pero sin romper si sólo hay DSN.
+            $host     = $settings['host']     ?? '??';
+            $port     = $settings['port']     ?? '??';
+            $database = $settings['database'] ?? '??';
+
+            $message = sprintf(
+                'No fue posible conectar a Firebird (%s:%s / BD:%s). Detalle: %s',
+                $host,
+                $port,
+                $database,
+                $exception->getMessage()
+            );
+            throw new RuntimeException($message, (int)$exception->getCode(), $exception);
+        }
+
+        if ($role) {
+            $pdo->exec("SET ROLE {$role}");
+        }
+
+        if ($dialect) {
+            $pdo->exec("SET SQL DIALECT {$dialect}");
+        }
+
+        return $pdo;
+    }
+
+    /**
+     * Carga configuración desde /config/database.php.
+     */
+    protected static function loadConfig(): void
+    {
+        if (!empty(self::$config)) {
+            return;
+        }
+
+        $path   = __DIR__ . '/../../config/database.php';
+        $config = require $path;
+
+        if (!is_array($config)) {
+            throw new RuntimeException("El archivo de configuración '{$path}' debe retornar un array");
+        }
+
+        self::$config = $config;
     }
 }

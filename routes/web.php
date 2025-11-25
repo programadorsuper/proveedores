@@ -47,7 +47,22 @@ $router->add($prefix . '/tickets/descargar', 'TicketsController@download', 'GET'
 $router->add($prefix . '/ordenes', 'OrdersController@index', 'GET', true);
 $router->add($prefix . '/ordenes/nuevas', 'OrdersController@nuevas', 'GET', true);
 $router->add($prefix . '/ordenes/backorder', 'OrdersController@backorder', 'GET', true);
+$router->add($prefix . '/ordenes/backorder/detalle', 'OrdersController@detalleBackorder', 'GET', true);
 $router->add($prefix . '/ordenes/entradas', 'OrdersController@entradas', 'GET', true);
+$router->add($prefix . '/ordenes/detalle', 'OrdersController@detalle', 'GET', true);
+$router->add($prefix . '/ordenes/listar', 'OrdersController@listOrders', 'GET', true);
+$router->add($prefix . '/ordenes/marcar-vista', 'OrdersController@markViewed', 'POST', true);
+$router->add($prefix . '/ordenes/exportar', 'OrdersController@export', 'GET', true);
+
+$router->add($prefix . '/citas', 'AppointmentsController@index', 'GET', true);
+$router->add($prefix . '/citas/listar', 'AppointmentsController@list', 'GET', true);
+$router->add($prefix . '/citas/crear', 'AppointmentsController@store', 'POST', true);
+$router->add($prefix . '/citas/cancelar', 'AppointmentsController@cancel', 'POST', true);
+
+$router->add('/citas/ordenes-disponibles', 'AppointmentsController@availableOrdersAjax', 'GET', true);
+$router->add('/citas/orden-resumen', 'AppointmentsController@orderSummaryAjax', 'GET', true);
+$router->add('/citas/orden-archivos', 'AppointmentsController@uploadOrderFilesAjax', 'POST', true);
+
 
 $router->add($prefix . '/exportaciones', 'ExportsController@index', 'GET', true);
 $router->add($prefix . '/exportaciones/generar', 'ExportsController@create', 'POST', true);

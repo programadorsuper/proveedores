@@ -144,10 +144,6 @@ class Database
             $pdo->exec("SET ROLE {$role}");
         }
 
-        if ($dialect) {
-            $pdo->exec("SET SQL DIALECT {$dialect}");
-        }
-
         return $pdo;
     }
 

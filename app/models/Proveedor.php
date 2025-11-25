@@ -29,20 +29,7 @@ class Proveedor
             return null;
         }
 
-        $hydrated = [
-            'id' => (int)$record['id'],
-            'username' => $record['username'],
-            'provider_id' => $record['provider_id'] !== null ? (int)$record['provider_id'] : null,
-            'roles' => $record['roles'] ?? [],
-            'allowed_days' => $record['allowed_days'] ?? [],
-            'is_active' => (bool)$record['is_active'],
-            'is_super_admin' => in_array('super_admin', $record['roles'] ?? [], true),
-            'is_provider_admin' => in_array('provider_admin', $record['roles'] ?? [], true),
-        ];
-
-        $hydrated['provider_ids'] = $this->fetchUserProviderIds($hydrated['id']);
-
-        return $hydrated;
+        return $this->hydrateSessionUser($record);
     }
 
     public function findByUsername(string $username): ?array
@@ -78,6 +65,74 @@ class Proveedor
         }
 
         return $row;
+    }
+
+    public function findByIdWithRoles(int $userId): ?array
+    {
+        $sql = "
+            SELECT u.*,
+                   array_remove(array_agg(DISTINCT r.code), NULL) AS roles
+            FROM proveedores.users u
+            LEFT JOIN proveedores.user_roles ur ON ur.user_id = u.id
+            LEFT JOIN proveedores.roles r ON r.id = ur.role_id
+            WHERE u.id = :id
+            GROUP BY u.id
+            LIMIT 1
+        ";
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute(['id' => $userId]);
+        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+
+        if (!$row) {
+            return null;
+        }
+
+        if (isset($row['roles'])) {
+            $row['roles'] = $this->parsePgArray($row['roles']);
+        } else {
+            $row['roles'] = [];
+        }
+
+        if (isset($row['allowed_days'])) {
+            $row['allowed_days'] = $this->parsePgArray($row['allowed_days'], true);
+        }
+
+        return $row;
+    }
+
+    public function hydrateSessionUser(array $record): array
+    {
+        $roles = $record['roles'] ?? [];
+        if (!is_array($roles)) {
+            $roles = $this->parsePgArray($roles);
+        }
+
+        $allowedDays = $record['allowed_days'] ?? [];
+        if (!is_array($allowedDays)) {
+            $allowedDays = $this->parsePgArray($allowedDays, true);
+        }
+
+        $hydrated = [
+            'id' => (int)$record['id'],
+            'username' => (string)($record['username'] ?? ''),
+            'email' => $record['email'] ?? null,
+            'provider_id' => isset($record['provider_id']) && $record['provider_id'] !== null
+                ? (int)$record['provider_id']
+                : null,
+            'roles' => $roles,
+            'allowed_days' => $allowedDays,
+            'is_active' => (bool)($record['is_active'] ?? false),
+            'is_super_admin' => in_array('super_admin', $roles, true),
+            'is_provider_admin' => in_array('provider_admin', $roles, true),
+            'must_change_password' => (bool)($record['must_change_password'] ?? false),
+            'locale' => $record['locale'] ?? null,
+            'last_login_at' => $record['last_login_at'] ?? null,
+        ];
+
+        $hydrated['provider_ids'] = $this->fetchUserProviderIds($hydrated['id']);
+
+        return $hydrated;
     }
 
     public function recordLogin(int $userId, string $ip, string $userAgent): void
@@ -362,6 +417,7 @@ class Proveedor
             'orders.news' => '/ordenes/nuevas',
             'orders.backorders' => '/ordenes/backorder',
             'orders.entries' => '/ordenes/entradas',
+            'appointments.index' => '/citas',
             'providers.index' => '/proveedores',
             'providers.settings' => '/proveedores',
             'others.index' => '/otros',

@@ -1,4 +1,7 @@
 <?php
+
+require_once __DIR__ . '/AuthManager.php';
+
 class Router
 {
     private array $routes = [];
@@ -48,18 +51,7 @@ class Router
                 $controllerObj = new $controller();
 
                 if (!empty($route['auth'])) {
-                    $sessionName = $config['session']['name'] ?? $config['session_name'] ?? null;
-                    if ($sessionName && session_status() === PHP_SESSION_NONE) {
-                        session_name($sessionName);
-                    }
-                    if (session_status() === PHP_SESSION_NONE) {
-                        session_start();
-                    }
-                    if (empty($_SESSION['auth_user'])) {
-                        $loginTarget = $basePath !== '' ? $basePath . '/login' : '/login';
-                        header('Location: ' . $loginTarget);
-                        exit;
-                    }
+                    AuthManager::requireAuth(true);
                 }
 
                 call_user_func([$controllerObj, $action]);

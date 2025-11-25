@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/BaseController.php';
 require_once __DIR__ . '/ProviderContext.php';
+require_once __DIR__ . '/AuthManager.php';
 require_once __DIR__ . '/../models/Proveedor.php';
 require_once __DIR__ . '/../models/Dashboard.php';
 
@@ -21,14 +22,11 @@ abstract class ProtectedController extends BaseController
         $this->config = require __DIR__ . '/../../config/config.php';
         $this->basePath = $this->config['base_path'] ?? $this->config['base_url'] ?? '';
         $this->contact = $this->config['contact'] ?? [];
-        $this->bootSession();
-        $this->user = $_SESSION['auth_user'] ?? null;
-
-        if (!$this->user) {
-            $target = $this->basePath !== '' ? $this->basePath . '/login' : '/login';
-            header('Location: ' . $target);
-            exit;
+        AuthManager::boot();
+        if (!AuthManager::requireAuth(false)) {
+            AuthManager::redirectToLogin();
         }
+        $this->user = AuthManager::user();
 
         $this->context = new ProviderContext($this->user);
         $this->moduleAccess = $this->context->moduleAccess();
@@ -56,20 +54,13 @@ abstract class ProtectedController extends BaseController
             'membershipPlan' => $this->context->membershipPlan(),
             'isProMembership' => $this->context->isPro(),
             'isEnterpriseMembership' => $this->context->isEnterprise(),
+            'pageStyles' => $data['pageStyles'] ?? [],
+            'pageScripts' => $data['pageScripts'] ?? [],
         ];
 
-        $this->render($view, array_merge($shared, $data));
-    }
+        unset($data['pageStyles'], $data['pageScripts']);
 
-    protected function bootSession(): void
-    {
-        $sessionName = $this->config['session']['name'] ?? $this->config['session_name'] ?? null;
-        if ($sessionName && session_status() === PHP_SESSION_NONE) {
-            session_name($sessionName);
-        }
-        if (session_status() === PHP_SESSION_NONE) {
-            session_start();
-        }
+        $this->render($view, array_merge($shared, $data));
     }
 
     protected function collectRouteNames(array $menus): array

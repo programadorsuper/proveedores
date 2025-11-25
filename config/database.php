@@ -14,6 +14,10 @@ $config = [
     'default' => getenv('DB_CONNECTION') ?: 'pgsql',
 
     'connections' => [
+
+        // -------------------------------
+        //  CONEXIÓN PRINCIPAL: PostgreSQL
+        // -------------------------------
         'pgsql' => [
             'driver'   => 'pgsql',
             'host'     => getenv('DB_HOST')     ?: '192.168.1.239',
@@ -21,36 +25,52 @@ $config = [
             'database' => getenv('DB_DATABASE') ?: 'kensei',
             'username' => getenv('DB_USERNAME') ?: 'datos',
             'password' => (getenv('DB_PASSWORD') !== false) ? getenv('DB_PASSWORD') : 'V9r#T7p$Xz2!LmQ8',
+
             'schema'       => getenv('DB_SCHEMA') ?: 'proveedores',
             'search_path'  => getenv('DB_SEARCH_PATH') ?: 'proveedores,public',
-            'sslmode'         => getenv('DB_PGSSL_MODE') ?: 'disable',  // disable | require | prefer | verify-ca | verify-full
+
+            'sslmode'         => getenv('DB_PGSSL_MODE') ?: 'disable',
             'sslcert'         => getenv('DB_PGSSL_CERT') ?: null,
             'sslkey'          => getenv('DB_PGSSL_KEY') ?: null,
             'sslrootcert'     => getenv('DB_PGSSL_ROOTCERT') ?: null,
+
             'app_name'        => getenv('APP_NAME') ?: 'proveedores_mvc',
             'connect_timeout' => (int)(getenv('DB_CONNECT_TIMEOUT') ?: 5),
+
             'options' => [
                 PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
                 PDO::ATTR_TIMEOUT            => (int)(getenv('DB_CONNECT_TIMEOUT') ?: 5),
-                // PDO::ATTR_PERSISTENT => true, // opcional
             ],
         ],
 
+        // ------------------------------------------------
+        //  CONEXIÓN FIREBIRD (SIN getenv, ESTILO UNIFORME)
+        // ------------------------------------------------
         'firebird' => [
             'driver'   => 'firebird',
-            'host'     => getenv('FB_HOST')     ?: '127.0.0.1',
-            'port'     => getenv('FB_PORT')     ?: '3050',
-            'database' => getenv('FB_DATABASE') ?: 'C:\path\to\legacy.fdb',
-            'username' => getenv('FB_USERNAME') ?: 'SYSDBA',
-            'password' => (getenv('FB_PASSWORD') !== false) ? getenv('FB_PASSWORD') : 'masterkey',
-            'charset'  => getenv('FB_CHARSET')  ?: 'UTF8',
-            'role'     => getenv('FB_ROLE')     ?: null,
-            'dialect'  => (int)(getenv('FB_DIALECT') ?: 3),
-            'options'  => [
+
+            // Datos directos
+            'host'     => '192.168.1.15',
+            'port'     => '3050',
+            'database' => '/home/papelera/papelera.fdb',
+            'charset'  => 'UTF8',
+
+            'username' => 'SYSDBA',
+            'password' => 'masterkey',
+
+            // Si tu Database.php arma el DSN automáticamente,
+            // estos campos son suficientes.
+            // Si usa DSN fijo, te paso la versión DSN abajo.
+
+            'options' => [
                 PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_PERSISTENT         => false,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             ],
+
+            'init'    => [],
+            'prewarm' => false,
         ],
     ],
 ];

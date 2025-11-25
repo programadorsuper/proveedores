@@ -115,6 +115,20 @@ $loginAction = ($basePath !== '' ? $basePath : '') . '/login';
             </div>
           </div>
 
+          <!-- Remember me -->
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 text-sm text-text-dark">
+            <label class="inline-flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                name="remember_me"
+                value="1"
+                class="size-4 rounded border-primary/40 bg-black/30 text-primary focus:ring-primary/50 focus:outline-none"
+              />
+              <span>Mantener sesion iniciada</span>
+            </label>
+            <span class="text-xs opacity-70">Usa esta opcion solo en dispositivos seguros.</span>
+          </div>
+
           <!-- Submit -->
           <button type="submit" class="btn-submit relative flex w-full cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 px-5 bg-primary text-white text-base font-bold tracking-[0.015em] transition-all hover:bg-primary/80 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-2 focus:ring-offset-background-dark">
             <span class="btn-label truncate">Acceder</span>

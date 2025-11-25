@@ -23,7 +23,6 @@ CREATE TABLE IF NOT EXISTS proveedores.providers (
     updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-DROP INDEX IF EXISTS proveedores.providers_external_id_unique;
 
 DO $$
 BEGIN
@@ -100,6 +99,169 @@ CREATE TABLE IF NOT EXISTS proveedores.user_roles (
     assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (user_id, role_id)
 );
+
+
+-- Sesiones persistentes (remember me)
+CREATE TABLE IF NOT EXISTS proveedores.user_sessions (
+    id             BIGSERIAL PRIMARY KEY,
+    user_id        BIGINT NOT NULL REFERENCES proveedores.users(id) ON DELETE CASCADE,
+    selector_hash  TEXT NOT NULL UNIQUE,
+    validator_hash TEXT NOT NULL,
+    ip_address     TEXT,
+    user_agent     TEXT,
+    last_seen_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at     TIMESTAMPTZ NOT NULL,
+    is_revoked     BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS user_sessions_user_id_index
+    ON proveedores.user_sessions (user_id);
+
+
+-- Seguimiento de vistas de ordenes
+CREATE TABLE IF NOT EXISTS proveedores.order_views (
+    id             BIGSERIAL PRIMARY KEY,
+    order_id       BIGINT NOT NULL,
+    provider_id    BIGINT REFERENCES proveedores.providers(id) ON DELETE SET NULL,
+    user_id        BIGINT NOT NULL REFERENCES proveedores.users(id) ON DELETE CASCADE,
+    first_seen_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_seen_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    seen_count     INTEGER NOT NULL DEFAULT 1,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (order_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS order_views_order_idx
+    ON proveedores.order_views (order_id);
+
+CREATE INDEX IF NOT EXISTS order_views_provider_idx
+    ON proveedores.order_views (provider_id);
+
+
+-- Citas y logistica de entregas
+CREATE TABLE IF NOT EXISTS proveedores.appointments (
+    id                  BIGSERIAL PRIMARY KEY,
+    folio               TEXT UNIQUE,
+    provider_id         BIGINT NOT NULL REFERENCES proveedores.providers(id) ON DELETE CASCADE,
+    created_by          BIGINT NOT NULL REFERENCES proveedores.users(id),
+    delivery_point_code TEXT,
+    delivery_point_name TEXT,
+    delivery_point_type TEXT,
+    delivery_address    TEXT,
+    appointment_date    DATE NOT NULL,
+    slot_start          TIME NOT NULL,
+    slot_end            TIME NOT NULL,
+    status              TEXT NOT NULL DEFAULT 'in_process' CHECK (status IN (
+        'in_process',
+        'accepted',
+        'rejected',
+        'cancelled',
+        'delivered'
+    )),
+    status_reason       TEXT,
+    status_payload      JSONB DEFAULT '{}'::JSONB,
+    status_changed_by   BIGINT REFERENCES proveedores.users(id),
+    status_changed_at   TIMESTAMPTZ,
+    metadata            JSONB DEFAULT '{}'::JSONB,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    cancelled_at        TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS appointments_provider_idx
+    ON proveedores.appointments (provider_id);
+
+CREATE INDEX IF NOT EXISTS appointments_status_idx
+    ON proveedores.appointments (status);
+
+CREATE TABLE IF NOT EXISTS proveedores.appointment_documents (
+    id                    BIGSERIAL PRIMARY KEY,
+    appointment_id        BIGINT NOT NULL REFERENCES proveedores.appointments(id) ON DELETE CASCADE,
+    provider_id           BIGINT NOT NULL REFERENCES proveedores.providers(id) ON DELETE CASCADE,
+    document_type         TEXT NOT NULL,
+    document_id           BIGINT,
+    document_reference    TEXT NOT NULL,
+    delivery_point_code   TEXT,
+    delivery_point_name   TEXT,
+    status                TEXT NOT NULL DEFAULT 'draft' CHECK (status IN (
+        'draft',
+        'pending',
+        'completed',
+        'cancelled'
+    )),
+    requested_total       NUMERIC(18,2),
+    invoiced_total        NUMERIC(18,2),
+    summary               JSONB DEFAULT '{}'::JSONB,
+    closed_at             TIMESTAMPTZ,
+    created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS appointment_documents_app_idx
+    ON proveedores.appointment_documents (appointment_id);
+
+CREATE TABLE IF NOT EXISTS proveedores.appointment_document_items (
+    id                       BIGSERIAL PRIMARY KEY,
+    appointment_document_id  BIGINT NOT NULL REFERENCES proveedores.appointment_documents(id) ON DELETE CASCADE,
+    product_code             TEXT,
+    sku                      TEXT,
+    description              TEXT,
+    unit_requested           TEXT,
+    unit_invoiced            TEXT,
+    ordered_quantity         NUMERIC(18,4),
+    invoiced_quantity        NUMERIC(18,4),
+    status                   TEXT DEFAULT 'pending',
+    metadata                 JSONB DEFAULT '{}'::JSONB
+);
+
+CREATE INDEX IF NOT EXISTS appointment_document_items_doc_idx
+    ON proveedores.appointment_document_items (appointment_document_id);
+
+CREATE TABLE IF NOT EXISTS proveedores.appointment_files (
+    id                       BIGSERIAL PRIMARY KEY,
+    appointment_document_id  BIGINT NOT NULL REFERENCES proveedores.appointment_documents(id) ON DELETE CASCADE,
+    file_type                TEXT NOT NULL,
+    storage_path             TEXT NOT NULL,
+    original_name            TEXT NOT NULL,
+    mime_type                TEXT,
+    size_bytes               BIGINT,
+    checksum                 TEXT,
+    metadata                 JSONB DEFAULT '{}'::JSONB,
+    created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS appointment_files_doc_idx
+    ON proveedores.appointment_files (appointment_document_id);
+
+CREATE TABLE IF NOT EXISTS proveedores.appointment_events (
+    id             BIGSERIAL PRIMARY KEY,
+    appointment_id BIGINT NOT NULL REFERENCES proveedores.appointments(id) ON DELETE CASCADE,
+    event_type     TEXT NOT NULL,
+    payload        JSONB DEFAULT '{}'::JSONB,
+    created_by     BIGINT REFERENCES proveedores.users(id),
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS appointment_events_app_idx
+    ON proveedores.appointment_events (appointment_id);
+
+CREATE TABLE IF NOT EXISTS proveedores.document_reservations (
+    id             BIGSERIAL PRIMARY KEY,
+    document_type  TEXT NOT NULL,
+    document_id    BIGINT NOT NULL,
+    provider_id    BIGINT NOT NULL REFERENCES proveedores.providers(id) ON DELETE CASCADE,
+    appointment_id BIGINT NOT NULL REFERENCES proveedores.appointments(id) ON DELETE CASCADE,
+    delivery_point_code TEXT,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (document_type, document_id)
+);
+
+CREATE INDEX IF NOT EXISTS document_reservations_provider_idx
+    ON proveedores.document_reservations (provider_id);
+
 
 
 -- Módulos disponibles en la plataforma

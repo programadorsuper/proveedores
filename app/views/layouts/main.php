@@ -4,6 +4,12 @@ $basePath = isset($basePath) ? rtrim((string)$basePath, '/') : '';
 $themeBase = ($basePath !== '' ? $basePath : '') . '/assets/theme';
 $themeAssets = $themeBase;
 $appAssets = $assets ?? [];
+$pageStyles = array_values(array_filter($pageStyles ?? [], static function ($style) {
+    return is_string($style) && $style !== '';
+}));
+$pageScripts = array_values(array_filter($pageScripts ?? [], static function ($script) {
+    return is_string($script) && $script !== '';
+}));
 $userData = $user ?? [];
 $userName = $userData['username'] ?? 'Invitado';
 $userRoles = $userData['roles'] ?? [];
@@ -100,6 +106,9 @@ $renderMenu = static function (array $items, string $basePath, string $current) 
     <link rel="stylesheet" href="<?= htmlspecialchars($themeAssets . '/plugins/global/plugins.bundle.css', ENT_QUOTES, 'UTF-8') ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars($themeAssets . '/css/style.bundle.css', ENT_QUOTES, 'UTF-8') ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(($basePath !== '' ? $basePath : '') . '/assets/plugins/fontawesome/css/all.min.css', ENT_QUOTES, 'UTF-8') ?>">
+    <?php foreach ($pageStyles as $style): ?>
+        <link rel="stylesheet" href="<?= htmlspecialchars($style, ENT_QUOTES, 'UTF-8') ?>">
+    <?php endforeach; ?>
 </head>
 
 <body id="kt_body" class="header-fixed header-tablet-and-mobile-fixed toolbar-enabled toolbar-fixed toolbar-tablet-and-mobile-fixed aside-enabled aside-fixed" style="--kt-toolbar-height:55px;--kt-toolbar-height-tablet-and-mobile:55px">
@@ -173,14 +182,6 @@ $renderMenu = static function (array $items, string $basePath, string $current) 
                         <div class="d-flex align-items-center me-3">
                             <h1 class="d-flex text-dark fw-bolder fs-3 align-items-center my-1"><?= htmlspecialchars($pageTitle, ENT_QUOTES, 'UTF-8') ?></h1>
                         </div>
-                        <div class="d-flex align-items-center gap-3">
-                            <button type="button" class="btn btn-sm btn-light-primary">
-                                <i class="fa-solid fa-sliders me-2"></i> Filtros
-                            </button>
-                            <button type="button" class="btn btn-sm btn-light">
-                                <i class="fa-solid fa-file-export me-2"></i> Exportar
-                            </button>
-                        </div>
                     </div>
                 </div>
                 <div class="content d-flex flex-column flex-column-fluid" id="kt_content">
@@ -211,9 +212,15 @@ $renderMenu = static function (array $items, string $basePath, string $current) 
             </div>
         </div>
     </div>
+    <script>
+        const basePath = <?= json_encode($basePath ?? '', JSON_UNESCAPED_SLASHES) ?>;
+    </script>
     <script src="<?= htmlspecialchars($themeAssets . '/plugins/global/plugins.bundle.js', ENT_QUOTES, 'UTF-8') ?>"></script>
     <script src="<?= htmlspecialchars(($basePath !== '' ? $basePath : '') . '/assets/plugins/apexcharts/apexcharts.min.js', ENT_QUOTES, 'UTF-8') ?>"></script>
     <script src="<?= htmlspecialchars($themeAssets . '/js/scripts.bundle.js', ENT_QUOTES, 'UTF-8') ?>"></script>
+    <?php foreach ($pageScripts as $script): ?>
+        <script src="<?=  htmlspecialchars(($basePath !== '' ? $basePath : '')) ?>/assets/js/<?= htmlspecialchars($script, ENT_QUOTES, 'UTF-8') ?>"></script>
+    <?php endforeach; ?>
 </body>
 
 </html>
