@@ -8,6 +8,6 @@ class ReportsController extends ProtectedController
     {
         $this->renderModule('reports/index', [
             'title' => 'Reportes',
-        ]);
+        ], 'analytics');
     }
 }

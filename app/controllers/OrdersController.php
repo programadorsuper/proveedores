@@ -29,6 +29,6 @@ class OrdersController extends ProtectedController
         $this->renderModule('orders/index', [
             'title' => $title,
             'page' => $page,
-        ]);
+        ], 'orders');
     }
 }

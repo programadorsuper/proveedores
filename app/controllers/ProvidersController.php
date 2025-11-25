@@ -15,12 +15,16 @@ class ProvidersController extends ProtectedController
 
     public function index(): void
     {
+        if (!$this->ensureModule('providers')) {
+            return;
+        }
+
         if (empty($this->permissions['providers'])) {
             $this->renderModule('providers/index', [
                 'title' => 'Proveedores',
                 'providers' => [],
                 'accessDenied' => true,
-            ]);
+            ], 'providers');
             return;
         }
 
@@ -31,6 +35,6 @@ class ProvidersController extends ProtectedController
             'providers' => $list,
             'accessDenied' => false,
             'isSuperAdmin' => !empty($this->user['is_super_admin']),
-        ]);
+        ], 'providers');
     }
 }

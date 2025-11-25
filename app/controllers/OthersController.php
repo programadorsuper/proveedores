@@ -24,6 +24,6 @@ class OthersController extends ProtectedController
         $this->renderModule('others/index', [
             'title' => $title,
             'page' => $page,
-        ]);
+        ], 'others');
     }
 }

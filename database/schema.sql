@@ -260,3 +260,505 @@ CREATE TABLE IF NOT EXISTS proveedores.scheduled_jobs (
 
 -- Vistas materializadas sugeridas (no se crean automáticamente)
 -- CREATE MATERIALIZED VIEW proveedores.mv_sales_summary ...
+
+
+-- ---------------------------------------------------------------------------
+-- Extensiones de modelo para licenciamiento, métricas y scoping
+-- ---------------------------------------------------------------------------
+
+ALTER TABLE proveedores.modules
+    ADD COLUMN IF NOT EXISTS tier TEXT NOT NULL DEFAULT 'free', -- free|pro|enterprise
+    ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::JSONB;
+
+ALTER TABLE proveedores.provider_memberships
+    ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'free', -- free|pro|enterprise
+    ADD COLUMN IF NOT EXISTS activated_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS auto_renew BOOLEAN NOT NULL DEFAULT FALSE;
+
+
+-- Límite y métricas de uso por proveedor-módulo
+CREATE TABLE IF NOT EXISTS proveedores.provider_quotas (
+    id           BIGSERIAL PRIMARY KEY,
+    provider_id  BIGINT NOT NULL REFERENCES proveedores.providers(id) ON DELETE CASCADE,
+    module_id    SMALLINT NOT NULL REFERENCES proveedores.modules(id) ON DELETE CASCADE,
+    quota_key    TEXT NOT NULL,             -- p.ej. exports_per_day, api_calls_month
+    quota_value  BIGINT NOT NULL DEFAULT 0,
+    period_start TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    period_end   TIMESTAMPTZ,
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (provider_id, module_id, quota_key)
+);
+
+
+-- Unlocks manuales (por año, campaña, trial, etc.)
+CREATE TABLE IF NOT EXISTS proveedores.provider_unlocks (
+    id              BIGSERIAL PRIMARY KEY,
+    provider_id     BIGINT NOT NULL REFERENCES proveedores.providers(id) ON DELETE CASCADE,
+    module_id       SMALLINT NOT NULL REFERENCES proveedores.modules(id) ON DELETE CASCADE,
+    unlock_type     TEXT NOT NULL DEFAULT 'manual', -- manual|trial|campaign
+    unlocked_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at      TIMESTAMPTZ,
+    granted_by_user BIGINT REFERENCES proveedores.users(id),
+    notes           TEXT,
+    UNIQUE (provider_id, module_id, unlock_type, unlocked_at)
+);
+
+
+-- SKUs por proveedor para mapear productos externos
+CREATE TABLE IF NOT EXISTS proveedores.provider_skus (
+    id           BIGSERIAL PRIMARY KEY,
+    provider_id  BIGINT NOT NULL REFERENCES proveedores.providers(id) ON DELETE CASCADE,
+    product_id   BIGINT,
+    sku          TEXT,
+    vendor_code  TEXT,
+    product_name TEXT,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (provider_id, sku),
+    UNIQUE (provider_id, product_id)
+);
+
+
+-- Tickets revisados por proveedor/usuario
+CREATE TABLE IF NOT EXISTS proveedores.ticket_reviews (
+    id           BIGSERIAL PRIMARY KEY,
+    provider_id  BIGINT NOT NULL REFERENCES proveedores.providers(id) ON DELETE CASCADE,
+    user_id      BIGINT NOT NULL REFERENCES proveedores.users(id) ON DELETE CASCADE,
+    ticket_id    BIGINT NOT NULL,
+    reviewed_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    notes        TEXT,
+    status       TEXT NOT NULL DEFAULT 'reviewed', -- reviewed|flagged
+    UNIQUE (provider_id, ticket_id)
+);
+
+
+-- Puntos para concursos/promociones por ticket
+CREATE TABLE IF NOT EXISTS proveedores.ticket_points (
+    id           BIGSERIAL PRIMARY KEY,
+    provider_id  BIGINT NOT NULL REFERENCES proveedores.providers(id) ON DELETE CASCADE,
+    ticket_id    BIGINT NOT NULL,
+    points       NUMERIC(14,2) NOT NULL DEFAULT 0,
+    reason       TEXT,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+
+-- Bitácora de actividades por usuario (supervisión admin proveedor / super admin)
+CREATE TABLE IF NOT EXISTS proveedores.user_activity_logs (
+    id            BIGSERIAL PRIMARY KEY,
+    provider_id   BIGINT REFERENCES proveedores.providers(id) ON DELETE SET NULL,
+    actor_user_id BIGINT REFERENCES proveedores.users(id) ON DELETE SET NULL,
+    target_user_id BIGINT REFERENCES proveedores.users(id) ON DELETE SET NULL,
+    action        TEXT NOT NULL, -- login|logout|create_user|update_user|delete_user|download|module_access|ticket_review
+    context       JSONB,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+
+-- Sincronizaciones con Firebird (órdenes, inventario, tickets)
+CREATE TABLE IF NOT EXISTS proveedores.firebird_sync_runs (
+    id             BIGSERIAL PRIMARY KEY,
+    sync_type      TEXT NOT NULL, -- orders|inventory|tickets
+    started_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    finished_at    TIMESTAMPTZ,
+    status         TEXT NOT NULL DEFAULT 'running', -- running|completed|failed
+    stats          JSONB,
+    error_message  TEXT
+);
+
+
+-- Staging de órdenes de compra provenientes de Firebird
+CREATE TABLE IF NOT EXISTS proveedores.firebird_purchase_orders (
+    id               BIGSERIAL PRIMARY KEY,
+    provider_id      BIGINT NOT NULL REFERENCES proveedores.providers(id) ON DELETE CASCADE,
+    external_id      TEXT NOT NULL,
+    order_number     TEXT,
+    order_date       DATE,
+    expected_date    DATE,
+    status           TEXT,
+    currency         TEXT,
+    total_amount     NUMERIC(16,2),
+    payload          JSONB,
+    imported_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_download_at TIMESTAMPTZ,
+    UNIQUE (provider_id, external_id)
+);
+
+
+CREATE TABLE IF NOT EXISTS proveedores.firebird_purchase_order_items (
+    id             BIGSERIAL PRIMARY KEY,
+    purchase_order_id BIGINT NOT NULL REFERENCES proveedores.firebird_purchase_orders(id) ON DELETE CASCADE,
+    line_number    INTEGER,
+    product_code   TEXT,
+    sku            TEXT,
+    quantity       NUMERIC(14,4),
+    unit_cost      NUMERIC(16,6),
+    total_cost     NUMERIC(16,6),
+    payload        JSONB
+);
+
+
+-- Inventario proveniente de Firebird
+CREATE TABLE IF NOT EXISTS proveedores.firebird_inventory_snapshots (
+    id            BIGSERIAL PRIMARY KEY,
+    provider_id   BIGINT NOT NULL REFERENCES proveedores.providers(id) ON DELETE CASCADE,
+    snapshot_date DATE NOT NULL,
+    warehouse     TEXT,
+    product_code  TEXT,
+    sku           TEXT,
+    on_hand       NUMERIC(14,4),
+    on_order      NUMERIC(14,4),
+    payload       JSONB,
+    imported_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (provider_id, snapshot_date, warehouse, product_code)
+);
+
+
+-- Tickets (cabecera) provenientes de Firebird
+CREATE TABLE IF NOT EXISTS proveedores.firebird_ticket_headers (
+    id            BIGSERIAL PRIMARY KEY,
+    provider_id   BIGINT NOT NULL REFERENCES proveedores.providers(id) ON DELETE CASCADE,
+    ticket_id     BIGINT NOT NULL,
+    series        TEXT,
+    folio         TEXT,
+    ticket_date   TIMESTAMPTZ,
+    store_code    TEXT,
+    customer_code TEXT,
+    total_amount  NUMERIC(16,2),
+    payload       JSONB,
+    imported_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (provider_id, ticket_id)
+);
+
+
+CREATE TABLE IF NOT EXISTS proveedores.firebird_ticket_items (
+    id           BIGSERIAL PRIMARY KEY,
+    ticket_id    BIGINT NOT NULL,
+    provider_id  BIGINT NOT NULL REFERENCES proveedores.providers(id) ON DELETE CASCADE,
+    line_number  INTEGER,
+    product_code TEXT,
+    sku          TEXT,
+    quantity     NUMERIC(14,4),
+    unit_price   NUMERIC(16,6),
+    unit_cost    NUMERIC(16,6),
+    payload      JSONB,
+    UNIQUE (provider_id, ticket_id, line_number)
+);
+
+
+-- ---------------------------------------------------------------------------
+-- Helpers y vistas para licenciamiento y scoping de datos
+-- ---------------------------------------------------------------------------
+
+CREATE OR REPLACE VIEW proveedores.vw_provider_membership_status AS
+SELECT
+    pm.provider_id,
+    pm.year,
+    pm.plan,
+    pm.status,
+    pm.payment_due_date,
+    pm.grace_expires_at,
+    pm.payment_date,
+    pm.activated_at,
+    pm.expires_at,
+    pm.auto_renew,
+    CASE
+        WHEN pm.status IN ('active', 'grace')
+             AND (pm.expires_at IS NULL OR pm.expires_at >= NOW())
+             THEN pm.plan
+        ELSE 'free'
+    END AS effective_plan
+FROM proveedores.provider_memberships pm;
+
+
+CREATE OR REPLACE VIEW proveedores.vw_provider_is_pro AS
+SELECT
+    v.provider_id,
+    (v.effective_plan IN ('pro', 'enterprise')) AS is_pro,
+    (v.effective_plan = 'enterprise') AS is_enterprise
+FROM proveedores.vw_provider_membership_status v
+WHERE v.year = EXTRACT(YEAR FROM CURRENT_DATE);
+
+
+CREATE OR REPLACE VIEW proveedores.vw_provider_module_access AS
+SELECT
+    pm.provider_id,
+    m.code        AS module_code,
+    m.tier,
+    m.metadata,
+    pm.is_enabled,
+    pm.enabled_at,
+    COALESCE(unlock.expires_at >= NOW(), unlock.id IS NOT NULL) AS has_unlock,
+    unlock.expires_at AS unlock_expires_at
+FROM proveedores.provider_modules pm
+JOIN proveedores.modules m ON m.id = pm.module_id
+LEFT JOIN LATERAL (
+    SELECT pu.id, pu.expires_at
+    FROM proveedores.provider_unlocks pu
+    WHERE pu.provider_id = pm.provider_id
+      AND pu.module_id = pm.module_id
+    ORDER BY pu.expires_at DESC NULLS LAST
+    LIMIT 1
+) unlock ON TRUE;
+
+
+CREATE OR REPLACE VIEW proveedores.vw_provider_module_effective AS
+SELECT
+    a.provider_id,
+    a.module_code,
+    a.tier,
+    a.metadata,
+    a.is_enabled,
+    a.enabled_at,
+    COALESCE(a.has_unlock, FALSE) AS has_unlock,
+    a.unlock_expires_at,
+    CASE
+        WHEN a.tier = 'free' THEN a.is_enabled
+        WHEN a.tier = 'pro' THEN a.is_enabled AND COALESCE(p.is_pro, FALSE)
+        WHEN a.tier = 'enterprise' THEN a.is_enabled AND COALESCE(p.is_enterprise, FALSE)
+        ELSE a.is_enabled
+    END AS can_access
+FROM proveedores.vw_provider_module_access a
+LEFT JOIN proveedores.vw_provider_is_pro p
+  ON p.provider_id = a.provider_id;
+
+
+-- ---------------------------------------------------------------------------
+-- Vistas de analytics (ajustar tablas reales en public.*)
+-- ---------------------------------------------------------------------------
+
+CREATE OR REPLACE VIEW proveedores.vw_sellout_daily AS
+SELECT
+    pr.id AS provider_id,
+    v.fecha::date AS day,
+    SUM(COALESCE(v.venta_bruta, 0) - COALESCE(v.descuento, 0) - COALESCE(v.devolucion, 0)) AS net_sales,
+    SUM(COALESCE(v.venta_costo_promedio, 0) - COALESCE(v.devolucion_costo_promedio, 0)) AS cost_of_goods,
+    SUM(COALESCE(v.venta_bruta_pza, 0) - COALESCE(v.devolucion_pza, 0)) AS units
+FROM public.ventas v
+JOIN proveedores.providers pr ON pr.external_id = v.id_proveedor
+WHERE v.fecha >= CURRENT_DATE - INTERVAL '5 years'
+GROUP BY pr.id, v.fecha::date;
+
+
+CREATE OR REPLACE VIEW proveedores.vw_sellin_monthly AS
+SELECT
+    pr.id AS provider_id,
+    date_trunc('month', m.fecha)::date AS month,
+    SUM(GREATEST(COALESCE(m.entradas, 0), 0) * COALESCE(m.costo, 0)) AS net_purchases,
+    SUM(GREATEST(COALESCE(m.entradas, 0), 0)) AS units
+FROM public.movimientos m
+JOIN proveedores.providers pr ON pr.external_id = m.id_proveedor
+WHERE m.fecha >= CURRENT_DATE - INTERVAL '5 years'
+GROUP BY pr.id, date_trunc('month', m.fecha);
+
+
+CREATE OR REPLACE VIEW proveedores.vw_inventory_cover AS
+SELECT
+    pr.id AS provider_id,
+    m.id_tienda AS store_id,
+    m.id_articulo AS product_id,
+    SUM(COALESCE(m.entradas, 0) - COALESCE(m.salidas, 0)) AS on_hand,
+    SUM(GREATEST(COALESCE(m.entradas, 0), 0)) AS on_order,
+    NULL::numeric AS days_of_inventory
+FROM public.movimientos m
+JOIN proveedores.providers pr ON pr.external_id = m.id_proveedor
+WHERE m.fecha >= CURRENT_DATE - INTERVAL '180 days'
+GROUP BY pr.id, m.id_tienda, m.id_articulo;
+
+
+CREATE OR REPLACE VIEW proveedores.vw_turnover_monthly AS
+SELECT
+    so.provider_id,
+    so.month,
+    CASE
+        WHEN COALESCE(si.net_purchases, 0) = 0 THEN NULL
+        ELSE so.net_sales / si.net_purchases
+    END AS turnover
+FROM (
+    SELECT
+        pr.id AS provider_id,
+        date_trunc('month', v.fecha)::date AS month,
+        SUM(COALESCE(v.venta_bruta, 0) - COALESCE(v.descuento, 0) - COALESCE(v.devolucion, 0)) AS net_sales
+    FROM public.ventas v
+    JOIN proveedores.providers pr ON pr.external_id = v.id_proveedor
+    WHERE v.fecha >= CURRENT_DATE - INTERVAL '5 years'
+    GROUP BY pr.id, date_trunc('month', v.fecha)
+) so
+LEFT JOIN (
+    SELECT
+        pr.id AS provider_id,
+        date_trunc('month', m.fecha)::date AS month,
+        SUM(GREATEST(COALESCE(m.entradas, 0), 0) * COALESCE(m.costo, 0)) AS net_purchases
+    FROM public.movimientos m
+    JOIN proveedores.providers pr ON pr.external_id = m.id_proveedor
+    WHERE m.fecha >= CURRENT_DATE - INTERVAL '5 years'
+    GROUP BY pr.id, date_trunc('month', m.fecha)
+) si ON si.provider_id = so.provider_id AND si.month = so.month;
+
+
+CREATE OR REPLACE VIEW proveedores.vw_top_products AS
+SELECT
+    pr.id AS provider_id,
+    v.id_articulo AS product_id,
+    SUM(COALESCE(v.venta_bruta, 0) - COALESCE(v.descuento, 0) - COALESCE(v.devolucion, 0)) AS net_sales,
+    SUM(COALESCE(v.venta_bruta_pza, 0) - COALESCE(v.devolucion_pza, 0)) AS units
+FROM public.ventas v
+JOIN proveedores.providers pr ON pr.external_id = v.id_proveedor
+WHERE v.fecha >= CURRENT_DATE - INTERVAL '5 years'
+GROUP BY pr.id, v.id_articulo;
+
+
+CREATE OR REPLACE VIEW proveedores.vw_top_customers AS
+SELECT
+    pr.id AS provider_id,
+    v.id_cliente AS customer_id,
+    SUM(COALESCE(v.venta_bruta, 0) - COALESCE(v.descuento, 0) - COALESCE(v.devolucion, 0)) AS net_sales,
+    COUNT(*) AS ticket_count
+FROM public.ventas v
+JOIN proveedores.providers pr ON pr.external_id = v.id_proveedor
+WHERE v.fecha >= CURRENT_DATE - INTERVAL '5 years'
+GROUP BY pr.id, v.id_cliente;
+
+
+CREATE OR REPLACE VIEW proveedores.vw_tickets AS
+WITH base AS (
+    SELECT
+        pr.id AS provider_id,
+        v.fecha::timestamp AS ticket_date,
+        v.id_tienda AS store_id,
+        v.id_cliente AS customer_id,
+        SUM(COALESCE(v.venta_bruta, 0) - COALESCE(v.descuento, 0) - COALESCE(v.devolucion, 0)) AS net_sales
+    FROM public.ventas v
+    JOIN proveedores.providers pr ON pr.external_id = v.id_proveedor
+    WHERE v.fecha >= CURRENT_DATE - INTERVAL '5 years'
+    GROUP BY pr.id, v.fecha, v.id_tienda, v.id_cliente
+)
+SELECT
+    base.provider_id,
+    ROW_NUMBER() OVER (PARTITION BY base.provider_id ORDER BY base.ticket_date, base.store_id, base.customer_id) AS ticket_id,
+    base.ticket_date,
+    base.store_id,
+    base.customer_id,
+    NULL::text AS series,
+    NULL::text AS folio,
+    base.net_sales
+FROM base;
+
+
+CREATE OR REPLACE VIEW proveedores.vw_ticket_items AS
+WITH base AS (
+    SELECT
+        pr.id AS provider_id,
+        v.fecha::timestamp AS ticket_date,
+        v.id_tienda AS store_id,
+        v.id_cliente AS customer_id,
+        v.id_articulo AS product_id,
+        SUM(COALESCE(v.venta_bruta_pza, 0) - COALESCE(v.devolucion_pza, 0)) AS qty,
+        SUM(COALESCE(v.venta_bruta, 0) - COALESCE(v.descuento, 0) - COALESCE(v.devolucion, 0)) AS total,
+        SUM(COALESCE(v.venta_costo_promedio, 0)) AS cost
+    FROM public.ventas v
+    JOIN proveedores.providers pr ON pr.external_id = v.id_proveedor
+    WHERE v.fecha >= CURRENT_DATE - INTERVAL '5 years'
+    GROUP BY pr.id, v.fecha, v.id_tienda, v.id_cliente, v.id_articulo
+)
+SELECT
+    base.provider_id,
+    t.ticket_id,
+    base.product_id,
+    art.sku,
+    art.descripcion AS name,
+    base.qty,
+    CASE WHEN base.qty = 0 THEN 0 ELSE base.total / base.qty END AS price,
+    base.total,
+    base.cost
+FROM base
+JOIN proveedores.vw_tickets t
+  ON t.provider_id = base.provider_id
+ AND t.ticket_date = base.ticket_date
+ AND t.store_id = base.store_id
+ AND t.customer_id = base.customer_id
+LEFT JOIN public.articulo art ON art.id_articulo = base.product_id;
+
+
+-- ---------------------------------------------------------------------------
+-- Funciones utilitarias
+-- ---------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION proveedores.fn_current_membership_plan(p_provider_id BIGINT)
+RETURNS TEXT
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    plan TEXT;
+BEGIN
+    SELECT effective_plan
+      INTO plan
+    FROM proveedores.vw_provider_membership_status
+    WHERE provider_id = p_provider_id
+      AND year = EXTRACT(YEAR FROM CURRENT_DATE)
+    ORDER BY expires_at DESC NULLS LAST
+    LIMIT 1;
+
+    IF plan IS NULL THEN
+        RETURN 'free';
+    END IF;
+    RETURN plan;
+END;
+$$;
+
+
+CREATE OR REPLACE FUNCTION proveedores.fn_can_access_module(p_provider_id BIGINT, p_module_code TEXT)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    access BOOLEAN;
+BEGIN
+    SELECT can_access
+      INTO access
+    FROM proveedores.vw_provider_module_effective
+    WHERE provider_id = p_provider_id
+      AND module_code = p_module_code
+    LIMIT 1;
+
+    RETURN COALESCE(access, FALSE);
+END;
+$$;
+
+
+-- Índices recomendados
+CREATE INDEX IF NOT EXISTS idx_ticket_reviews_provider ON proveedores.ticket_reviews(provider_id);
+CREATE INDEX IF NOT EXISTS idx_ticket_reviews_ticket ON proveedores.ticket_reviews(ticket_id);
+CREATE INDEX IF NOT EXISTS idx_ticket_points_provider ON proveedores.ticket_points(provider_id);
+CREATE INDEX IF NOT EXISTS idx_provider_module_effective ON proveedores.provider_modules(provider_id, module_id);
+CREATE INDEX IF NOT EXISTS idx_provider_quotas_provider ON proveedores.provider_quotas(provider_id, module_id);
+CREATE INDEX IF NOT EXISTS idx_firebird_purchase_orders_provider ON proveedores.firebird_purchase_orders(provider_id);
+CREATE INDEX IF NOT EXISTS idx_firebird_inventory_provider ON proveedores.firebird_inventory_snapshots(provider_id, snapshot_date);
+CREATE INDEX IF NOT EXISTS idx_firebird_tickets_provider ON proveedores.firebird_ticket_headers(provider_id, ticket_date);
+
+
+-- ---------------------------------------------------------------------------
+-- Materialized views sugeridas (se crean vacías)
+-- ---------------------------------------------------------------------------
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS proveedores.mv_sellout_daily
+AS SELECT * FROM proveedores.vw_sellout_daily WITH NO DATA;
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS proveedores.mv_sellin_monthly
+AS SELECT * FROM proveedores.vw_sellin_monthly WITH NO DATA;
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS proveedores.mv_inventory_cover
+AS SELECT * FROM proveedores.vw_inventory_cover WITH NO DATA;
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS proveedores.mv_turnover_monthly
+AS SELECT * FROM proveedores.vw_turnover_monthly WITH NO DATA;
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS proveedores.mv_top_products
+AS SELECT * FROM proveedores.vw_top_products WITH NO DATA;
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS proveedores.mv_top_customers
+AS SELECT * FROM proveedores.vw_top_customers WITH NO DATA;
+
+
+-- Advertencia: ejecutar REFRESH MATERIALIZED VIEW (CONCURRENTLY cuando aplique)

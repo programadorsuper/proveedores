@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/BaseController.php';
+require_once __DIR__ . '/ProviderContext.php';
 require_once __DIR__ . '/../models/Proveedor.php';
 require_once __DIR__ . '/../models/Dashboard.php';
 
@@ -8,10 +9,12 @@ abstract class ProtectedController extends BaseController
 {
     protected array $config = [];
     protected ?array $user = null;
+    protected ProviderContext $context;
     protected array $menus = [];
     protected array $permissions = [];
     protected array $contact = [];
     protected string $basePath = '';
+    protected array $moduleAccess = [];
 
     public function __construct()
     {
@@ -27,13 +30,20 @@ abstract class ProtectedController extends BaseController
             exit;
         }
 
+        $this->context = new ProviderContext($this->user);
+        $this->moduleAccess = $this->context->moduleAccess();
+
         $model = new Proveedor();
-        $this->menus = $model->getMenus($this->user);
+        $this->menus = $model->getMenus($this->user, $this->context);
         $this->permissions = $this->mapPermissions($this->collectRouteNames($this->menus));
     }
 
-    protected function renderModule(string $view, array $data = []): void
+    protected function renderModule(string $view, array $data = [], ?string $moduleCode = null): void
     {
+        if ($moduleCode !== null && !$this->ensureModule($moduleCode)) {
+            return;
+        }
+
         $shared = [
             'title' => $data['title'] ?? 'Modulo',
             'user' => $this->user,
@@ -42,6 +52,10 @@ abstract class ProtectedController extends BaseController
             'assets' => $this->config['assets'] ?? [],
             'contact' => $this->contact,
             'permissions' => $this->permissions,
+            'moduleAccess' => $this->moduleAccess,
+            'membershipPlan' => $this->context->membershipPlan(),
+            'isProMembership' => $this->context->isPro(),
+            'isEnterpriseMembership' => $this->context->isEnterprise(),
         ];
 
         $this->render($view, array_merge($shared, $data));
@@ -95,12 +109,19 @@ abstract class ProtectedController extends BaseController
             'others' => $hasAny(['others.index', 'others.returns', 'others.inventory'], $routes),
             'users' => $hasAny(['users.index', 'users.admin'], $routes),
             'providers' => $hasAny(['providers.index'], $routes),
+            'tickets' => $hasAny(['tickets.index', 'tickets.search'], $routes),
+            'exports' => $hasAny(['exports.index'], $routes),
         ];
     }
 
     protected function dashboardService(): Dashboard
     {
         return new Dashboard();
+    }
+
+    protected function providerContext(): ProviderContext
+    {
+        return $this->context;
     }
 
     protected function isAjaxRequest(): bool
@@ -111,5 +132,35 @@ abstract class ProtectedController extends BaseController
         return $requestedWith === 'xmlhttprequest'
             || $requestedWith === 'fetch'
             || str_contains($accept, 'application/json');
+    }
+
+    protected function ensureModule(string $moduleCode): bool
+    {
+        if ($this->context->canAccessModule($moduleCode)) {
+            return true;
+        }
+
+        $this->denyModule($moduleCode);
+        return false;
+    }
+
+    protected function denyModule(string $moduleCode): void
+    {
+        http_response_code(403);
+        $this->render('errors/module_locked', [
+            'title' => 'Acceso restringido',
+            'lockedModule' => $moduleCode,
+            'membershipPlan' => $this->context->membershipPlan(),
+            'moduleAccess' => $this->moduleAccess,
+            'user' => $this->user,
+            'menus' => $this->menus,
+            'basePath' => $this->basePath,
+            'assets' => $this->config['assets'] ?? [],
+            'contact' => $this->contact,
+            'permissions' => $this->permissions,
+            'isProMembership' => $this->context->isPro(),
+            'isEnterpriseMembership' => $this->context->isEnterprise(),
+        ]);
+        exit;
     }
 }

@@ -15,12 +15,16 @@ class UsersController extends ProtectedController
 
     public function index(): void
     {
+        if (!$this->ensureModule('users_admin')) {
+            return;
+        }
+
         if (empty($this->permissions['users'])) {
             $this->renderModule('users/index', [
                 'title' => 'Usuarios',
                 'users' => [],
                 'accessDenied' => true,
-            ]);
+            ], 'users_admin');
             return;
         }
         
@@ -31,6 +35,6 @@ class UsersController extends ProtectedController
             'title' => 'Usuarios',
             'users' => $list,
             'isSuperAdmin' => $isSuperAdmin,
-        ]);
+        ], 'users_admin');
     }
 }

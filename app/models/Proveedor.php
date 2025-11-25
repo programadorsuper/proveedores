@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/../core/ProviderContext.php';
+
 class Proveedor
 {
     protected \PDO $db;
@@ -116,11 +118,13 @@ class Proveedor
         }
     }
 
-    public function getMenus(array $sessionUser): array
+    public function getMenus(array $sessionUser, ?ProviderContext $context = null): array
     {
         $isProviderAdmin = !empty($sessionUser['is_provider_admin']);
         $isSuperAdmin = !empty($sessionUser['is_super_admin']);
         $roles = $sessionUser['roles'] ?? [];
+        $context ??= new ProviderContext($sessionUser);
+        $moduleAccess = $context->moduleAccess();
 
         if ($isSuperAdmin) {
             $menus = $this->fetchAllMenus();
@@ -178,6 +182,7 @@ class Proveedor
             unset($item);
         };
 
+        $tree = $this->filterMenusByModuleAccess($tree, $moduleAccess, $isSuperAdmin);
         $sortFn($tree);
 
         return $tree;
@@ -186,8 +191,10 @@ class Proveedor
     protected function fetchAllMenus(): array
     {
         $sql = "
-            SELECT id, label, route_name, icon, sort_order, visibility, parent_id
-            FROM proveedores.menus
+            SELECT mn.id, mn.label, mn.route_name, mn.icon, mn.sort_order,
+                   mn.visibility, mn.parent_id, mn.module_id, m.code AS module_code
+            FROM proveedores.menus mn
+            JOIN proveedores.modules m ON m.id = mn.module_id
             ORDER BY sort_order, label
         ";
 
@@ -199,8 +206,10 @@ class Proveedor
     {
         $isAdmin = $isProviderAdmin || $isSuperAdmin;
         $sql = "
-            SELECT id, label, route_name, icon, sort_order, visibility, parent_id
-            FROM proveedores.menus
+            SELECT mn.id, mn.label, mn.route_name, mn.icon, mn.sort_order,
+                   mn.visibility, mn.parent_id, mn.module_id, m.code AS module_code
+            FROM proveedores.menus mn
+            JOIN proveedores.modules m ON m.id = mn.module_id
             WHERE visibility = 'all'
                OR (visibility = 'admin' AND :is_admin = TRUE)
                OR (visibility = 'super_admin' AND :is_super_admin = TRUE)
@@ -223,10 +232,12 @@ class Proveedor
 
         $placeholders = implode(', ', array_fill(0, count($roleCodes), '?'));
         $sql = "
-            SELECT DISTINCT m.id, m.label, m.route_name, m.icon, m.sort_order, m.visibility, m.parent_id
-            FROM proveedores.menus m
-            INNER JOIN proveedores.menu_roles mr ON mr.menu_id = m.id
+            SELECT DISTINCT mn.id, mn.label, mn.route_name, mn.icon, mn.sort_order,
+                            mn.visibility, mn.parent_id, mn.module_id, mod.code AS module_code
+            FROM proveedores.menus mn
+            INNER JOIN proveedores.menu_roles mr ON mr.menu_id = mn.id
             INNER JOIN proveedores.roles r ON r.id = mr.role_id
+            INNER JOIN proveedores.modules mod ON mod.id = mn.module_id
             WHERE r.code IN ($placeholders)
         ";
 
@@ -243,8 +254,10 @@ class Proveedor
         }
         $placeholders = implode(', ', array_fill(0, count($ids), '?'));
         $sql = "
-            SELECT id, label, route_name, icon, sort_order, visibility, parent_id
-            FROM proveedores.menus
+            SELECT mn.id, mn.label, mn.route_name, mn.icon, mn.sort_order,
+                   mn.visibility, mn.parent_id, mn.module_id, m.code AS module_code
+            FROM proveedores.menus mn
+            JOIN proveedores.modules m ON m.id = mn.module_id
             WHERE id IN ($placeholders)
         ";
         $stmt = $this->db->prepare($sql);
@@ -293,6 +306,7 @@ class Proveedor
             'label' => $menu['label'] ?? '',
             'route_name' => $routeName,
             'route' => $this->resolveRoutePath($routeName),
+            'module_code' => isset($menu['module_code']) ? strtolower((string)$menu['module_code']) : null,
             'icon' => $menu['icon'] ?: 'fa-solid fa-circle',
             'sort_order' => (int)($menu['sort_order'] ?? 100),
             'visibility' => $menu['visibility'] ?? 'all',
@@ -301,14 +315,46 @@ class Proveedor
         ];
     }
 
+    protected function filterMenusByModuleAccess(array $tree, array $moduleAccess, bool $isSuperAdmin): array
+    {
+        if ($isSuperAdmin) {
+            return $tree;
+        }
+
+        $filtered = [];
+        foreach ($tree as $item) {
+            $children = !empty($item['children'])
+                ? $this->filterMenusByModuleAccess($item['children'], $moduleAccess, $isSuperAdmin)
+                : [];
+
+            $moduleCode = $item['module_code'] ?? '';
+            $moduleCode = is_string($moduleCode) ? strtolower($moduleCode) : '';
+            $allowed = true;
+
+            if ($moduleCode !== '') {
+                $info = $moduleAccess[$moduleCode] ?? null;
+                $allowed = $info === null ? false : (bool)($info['can_access'] ?? false);
+            }
+
+            if ($allowed || !empty($children)) {
+                $item['children'] = $children;
+                $filtered[] = $item;
+            }
+        }
+
+        return $filtered;
+    }
+
     protected function resolveRoutePath(string $routeName): string
     {
         static $map = [
             'dashboard.index' => '/home',
+            'kpis.index' => '/kpis',
             'sellinout.index' => '/ventas/sellinout',
             'sales.index' => '/ventas',
             'sales.periods' => '/ventas/periodos',
             'sales.sellout' => '/ventas/sellout',
+            'sales.compare' => '/ventas/comparativos',
             'purchases.index' => '/compras',
             'purchases.periods' => '/compras/periodos',
             'purchases.sellin' => '/compras/sellin',
@@ -317,16 +363,31 @@ class Proveedor
             'orders.backorders' => '/ordenes/backorder',
             'orders.entries' => '/ordenes/entradas',
             'providers.index' => '/proveedores',
+            'providers.settings' => '/proveedores',
             'others.index' => '/otros',
             'others.returns' => '/otros/devoluciones',
             'others.inventory' => '/otros/inventario',
+            'others.devoluciones' => '/otros/devoluciones',
+            'others.inventario' => '/otros/inventario',
             'users.index' => '/usuarios',
             'users.admin' => '/usuarios/admin',
+            'users.manage' => '/usuarios',
             'notifications.index' => '/alertas',
             'reports.index' => '/reportes',
             'reports.sales' => '/reportes/ventas',
             'reports.orders' => '/reportes/ordenes',
             'reports.purchases' => '/reportes/compras',
+            'inventory.index' => '/inventario',
+            'inventory.cover' => '/inventario/cobertura',
+            'inventory.breaks' => '/inventario/quiebres',
+            'rotations.index' => '/rotaciones',
+            'rotations.turnover' => '/rotaciones/turnover',
+            'tickets.index' => '/tickets',
+            'tickets.search' => '/tickets/buscar',
+            'tickets.points' => '/tickets/puntos',
+            'exports.index' => '/exportaciones',
+            'exports.history' => '/exportaciones',
+            'api.tokens' => '/api/tokens',
         ];
 
         if ($routeName === '') {
@@ -360,3 +421,4 @@ class Proveedor
         return $castInt ? array_map('intval', $items) : $items;
     }
 }
+
