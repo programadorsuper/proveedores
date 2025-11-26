@@ -38,8 +38,9 @@ class OrdersController extends ProtectedController
                 'markSeenEndpoint' => $this->moduleUrl('/ordenes/marcar-vista'),
                 'exportEndpoint' => $this->moduleUrl('/ordenes/exportar'),
                 'detailEndpoint' => $detailUrl,
+                'checkNewEndpoint'  => $this->moduleUrl('/ordenes/nuevas/check'),
             ],
-            'pageScripts' => [$assetBase . '/assets/js/orders-nuevas.js'],
+            'pageScripts' => ['/orders-nuevas.js'],
             'pageStyles' => [$assetBase . '/assets/css/orders.css'],
         ]);
     }
@@ -48,50 +49,56 @@ class OrdersController extends ProtectedController
     {
         try {
             $isSuperAdmin = !empty($this->user['is_super_admin']);
-            $providerIds = $isSuperAdmin ? [] : $this->context->providerIds();
+            $providerIds  = $isSuperAdmin ? [] : $this->context->providerIds();
 
-            $page = max(1, (int)($_GET['page'] ?? 1));
+            $page    = max(1, (int)($_GET['page'] ?? 1));
             $perPage = (int)($_GET['per_page'] ?? 25);
-            $search = trim((string)($_GET['search'] ?? ''));
-            $days = (int)($_GET['days'] ?? 30);
+            $search  = trim((string)($_GET['search'] ?? ''));
+            $days    = (int)($_GET['days'] ?? 30);
 
             $result = $this->orders->getNewPurchaseOrders($providerIds, [
-                'page' => $page,
+                'page'     => $page,
                 'per_page' => $perPage,
-                'search' => $search,
-                'days' => $days,
+                'search'   => $search,
+                'days'     => $days,
             ]);
 
             $orderIds = array_column($result['data'], 'ID_COMPRA');
-            $views = !empty($orderIds) ? $this->orderViews->summaries($orderIds, (int)$this->user['id']) : [];
+            $views    = !empty($orderIds)
+                ? $this->orderViews->summaries($orderIds, (int)$this->user['id'])
+                : [];
 
             foreach ($result['data'] as &$order) {
-                $orderId = (int)$order['ID_COMPRA'];
+                $orderId  = (int)$order['ID_COMPRA'];
                 $viewInfo = $views[$orderId] ?? null;
-                $viewers = (int)($viewInfo['viewers'] ?? 0);
+                $viewers  = (int)($viewInfo['viewers'] ?? 0);
                 $seenByMeAt = $viewInfo['seen_by_me_at'] ?? null;
 
                 $order['seen'] = [
-                    'seen_by_me' => $seenByMeAt !== null,
-                    'seen_by_me_at' => $seenByMeAt,
-                    'viewers' => $viewers,
+                    'seen_by_me'     => $seenByMeAt !== null,
+                    'seen_by_me_at'  => $seenByMeAt,
+                    'viewers'        => $viewers,
                     'last_view_user' => $viewInfo['last_username'] ?? null,
-                    'last_view_at' => $viewInfo['latest_seen_at'] ?? null,
+                    'last_view_at'   => $viewInfo['latest_seen_at'] ?? null,
                     'seen_by_others' => $viewers > ($seenByMeAt !== null ? 1 : 0),
                 ];
             }
             unset($order);
 
+            // 👇 NUEVO: último movimiento de vistas en Postgres
+            $lastViewsTs = $this->orderViews->lastViewsActivity($providerIds);
+
             $payload = [
                 'data' => $result['data'],
                 'meta' => array_merge($result['meta'], [
                     'filters' => [
-                        'page' => $page,
+                        'page'     => $page,
                         'per_page' => $perPage,
-                        'search' => $search,
-                        'days' => $days,
+                        'search'   => $search,
+                        'days'     => $days,
                     ],
-                    'can_view_all' => $isSuperAdmin,
+                    'can_view_all'  => $isSuperAdmin,
+                    'last_views_ts' => $lastViewsTs, // 👈
                 ]),
             ];
 
@@ -99,12 +106,60 @@ class OrdersController extends ProtectedController
         } catch (\Throwable $exception) {
             error_log('[OrdersController] listOrders error: ' . $exception->getMessage());
             $this->jsonResponse([
-                'error' => 'No fue posible obtener las ordenes. Intenta de nuevo.',
-                'detail' => $this->isDebug() ? $exception->getMessage() : null,
+                'error'  => 'No fue posible obtener las ordenes. Intenta de nuevo.',
+                'detail' => $exception,
             ], 500);
         }
     }
 
+    public function checkNew(): void
+    {
+        try {
+            $sinceId      = (int)($_GET['since_id'] ?? 0);
+            $days         = (int)($_GET['days'] ?? 30);
+            $sinceViewsTs = $_GET['since_views_ts'] ?? null;
+
+            $isSuperAdmin = !empty($this->user['is_super_admin']);
+            $providerIds  = $isSuperAdmin ? [] : $this->context->providerIds();
+
+            // 1) Firebird: nuevas órdenes
+            $ordersInfo = $this->orders->checkNewPurchaseOrders($providerIds, $sinceId, $days);
+
+            // 2) Postgres: actividad de vistas
+            $lastViewsTsDb = $this->orderViews->lastViewsActivity($providerIds);
+            $hasViewUpdates = false;
+
+            if ($lastViewsTsDb) {
+                if ($sinceViewsTs) {
+                    $hasViewUpdates = $lastViewsTsDb > $sinceViewsTs;
+                } else {
+                    // primera vez que preguntamos: considera que hay actividad
+                    $hasViewUpdates = true;
+                }
+            }
+
+            $this->jsonResponse([
+                'has_new_orders'   => $ordersInfo['has_new'],
+                'latest_id'        => $ordersInfo['latest_id'],
+                'has_view_updates' => $hasViewUpdates,
+                'last_views_ts'    => $lastViewsTsDb,
+            ]);
+        } catch (\Throwable $e) {
+            $this->jsonResponse([
+                'error'  => 'No fue posible verificar nuevas ordenes.',
+                'detail' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    protected function getCurrentProviderIds(): array
+    {
+        // si ya tienes en sesión algo como Session::get('provider_id')
+        // return [ (int) Session::get('provider_id') ];
+
+        // placeholder para que no truene si no lo has hecho aún:
+        return [];
+    }
     public function backorder(): void
     {
         $isSuperAdmin = !empty($this->user['is_super_admin']);

@@ -219,7 +219,7 @@ $renderMenu = static function (array $items, string $basePath, string $current) 
     <script src="<?= htmlspecialchars(($basePath !== '' ? $basePath : '') . '/assets/plugins/apexcharts/apexcharts.min.js', ENT_QUOTES, 'UTF-8') ?>"></script>
     <script src="<?= htmlspecialchars($themeAssets . '/js/scripts.bundle.js', ENT_QUOTES, 'UTF-8') ?>"></script>
     <?php foreach ($pageScripts as $script): ?>
-        <script src="<?=  htmlspecialchars(($basePath !== '' ? $basePath : '')) ?>/assets/js/<?= htmlspecialchars($script, ENT_QUOTES, 'UTF-8') ?>"></script>
+        <script src="<?=  htmlspecialchars(($basePath !== '' ? $basePath : '')) ?>/assets/js/<?= htmlspecialchars($script, ENT_QUOTES, 'UTF-8'). '?time=' . time(); ?>"></script>
     <?php endforeach; ?>
 </body>
 

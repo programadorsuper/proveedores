@@ -53,6 +53,7 @@ $router->add($prefix . '/ordenes/detalle', 'OrdersController@detalle', 'GET', tr
 $router->add($prefix . '/ordenes/listar', 'OrdersController@listOrders', 'GET', true);
 $router->add($prefix . '/ordenes/marcar-vista', 'OrdersController@markViewed', 'POST', true);
 $router->add($prefix . '/ordenes/exportar', 'OrdersController@export', 'GET', true);
+$router->add($prefix . '/ordenes/nuevas/check', 'OrdersController@checkNew', 'GET', true);
 
 $router->add($prefix . '/citas', 'AppointmentsController@index', 'GET', true);
 $router->add($prefix . '/citas/listar', 'AppointmentsController@list', 'GET', true);

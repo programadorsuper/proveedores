@@ -21,20 +21,23 @@ $isNuevas = $page === 'nuevas';
 if ($isNuevas) {
     $configPayload = [
         'endpoints' => [
-            'list' => $ordersConfig['listEndpoint'] ?? '',
-            'markSeen' => $ordersConfig['markSeenEndpoint'] ?? '',
-            'export' => $ordersConfig['exportEndpoint'] ?? '',
-            'detail' => $ordersConfig['detailEndpoint'] ?? '',
+            'list'      => $ordersConfig['listEndpoint'] ?? '',
+            'markSeen'  => $ordersConfig['markSeenEndpoint'] ?? '',
+            'export'    => $ordersConfig['exportEndpoint'] ?? '',
+            'detail'    => $ordersConfig['detailEndpoint'] ?? '',
+            // 👇 nuevo endpoint ligero para checar si hay nuevas órdenes
+            'checkNew'  => $ordersConfig['checkNewEndpoint'] ?? '',
         ],
         'filters' => [
-            'page' => 1,
+            'page'    => 1,
             'perPage' => (int)($filters['per_page'] ?? 25),
-            'days' => (int)($filters['days'] ?? 30),
-            'search' => '',
+            'days'    => (int)($filters['days'] ?? 30),
+            'search'  => '',
         ],
     ];
     $configJson = json_encode($configPayload, JSON_UNESCAPED_SLASHES);
 }
+
 ?>
 
 <?php if ($isNuevas): ?>

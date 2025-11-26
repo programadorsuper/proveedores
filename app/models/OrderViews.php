@@ -1,7 +1,5 @@
 <?php
 
-require_once __DIR__ . '/../core/Database.php';
-
 class OrderViews
 {
     protected \PDO $db;
@@ -101,5 +99,37 @@ class OrderViews
         }
 
         return $map;
+    }
+    public function lastViewsActivity(array $providerIds = []): ?string
+    {
+        $conditions = [];
+        $params     = [];
+
+        if (!empty($providerIds)) {
+            $conditions[] = 'ov.provider_id = ANY(:provider_ids::bigint[])';
+            $params['provider_ids'] = '{' . implode(',', array_map('intval', $providerIds)) . '}';
+        }
+
+        $where = $conditions ? 'WHERE ' . implode(' AND ', $conditions) : '';
+
+        $sql = "
+            SELECT MAX(ov.last_seen_at) AS last_views_ts
+            FROM proveedores.order_views ov
+            {$where}
+        ";
+
+        $stmt = $this->db->prepare($sql);
+        foreach ($params as $key => $value) {
+            if ($key === 'provider_ids') {
+                $stmt->bindValue(':' . $key, $value, \PDO::PARAM_STR);
+            } else {
+                $stmt->bindValue(':' . $key, $value);
+            }
+        }
+
+        $stmt->execute();
+        $row = $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+
+        return ($row && $row['last_views_ts']) ? $row['last_views_ts'] : null;
     }
 }

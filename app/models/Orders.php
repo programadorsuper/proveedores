@@ -63,10 +63,8 @@ class Orders
                 CP.TELEFONO_OFICINA,
                 CP.ATENCION,
                 T.NOMBRE_CORTO,
-
                 U.NOMBRE || ' ' || U.PATERNO || ' ' || U.MATERNO  AS CAPTURA,
                 UA.NOMBRE || ' ' || UA.PATERNO || ' ' || UA.MATERNO AS AUTORIZA
-
             FROM TBL_COMPRAS C
             INNER JOIN TBL_USUARIO U
                 ON C.ID_USUARIO_CAPTURA = U.ID_USUARIO
@@ -80,7 +78,6 @@ class Orders
                 ON C.ID_TEMPORADA = TEM.ID_TEMPORADA
             WHERE C.ID_COMPRA = ?
         ";
-
         $stmt = $this->db->prepare($sql);
         $stmt->execute([$idCompra]);
         $row = $stmt->fetch(\PDO::FETCH_ASSOC);
@@ -113,7 +110,6 @@ class Orders
                 C.IMPORTE,
                 C.DIAS_CREDITO,
                 C.ID_TIENDA_CONSIGNADA,
-
                 CASE 
                     WHEN C.ID_TIENDA_CONSIGNADA = T.ID_TIENDA THEN
                         TRIM(T.NOMBRE_CORTO) || ' - ' ||
@@ -124,7 +120,6 @@ class Orders
                     ELSE
                         'CENDIS - AV.TEJOCOTES, COL SAN MARTIN OBISPO, 54769'
                 END AS LUGAR_ENTREGA,
-
                 CP.RAZON_SOCIAL,
                 CP.NUMERO_PROVEEDOR,
                 CP.CALLE,
@@ -137,10 +132,8 @@ class Orders
                 CP.TELEFONO_OFICINA,
                 CP.ATENCION,
                 T.NOMBRE_CORTO,
-
                 U.NOMBRE || ' ' || U.PATERNO || ' ' || U.MATERNO  AS CAPTURA,
                 UA.NOMBRE || ' ' || UA.PATERNO || ' ' || UA.MATERNO AS AUTORIZA
-
             FROM TBL_COMPRAS C
             INNER JOIN TBL_USUARIO U
                 ON C.ID_USUARIO_CAPTURA = U.ID_USUARIO
@@ -169,17 +162,37 @@ class Orders
         $page = max(1, (int)($options['page'] ?? 1));
         $perPage = (int)($options['per_page'] ?? 25);
         $perPage = max(5, min($perPage, 100));
+
         $search = trim((string)($options['search'] ?? ''));
         $days = (int)($options['days'] ?? 30);
         $days = max(1, min($days, 120));
-        $fromDate = (new \DateTimeImmutable())->modify(sprintf('-%d days', $days))->format('Y-m-d 00:00:00');
+
+        $fromDate = (new \DateTimeImmutable())
+            ->modify(sprintf('-%d days', $days))
+            ->format('Y-m-d 00:00:00');
 
         $offset = ($page - 1) * $perPage;
 
-        $filters = ["C.ESTADO = 'A'", "C.FECHA >= :from_date"];
-        $params = [':from_date' => $fromDate];
+        // Filtros base (incluyendo lo que tenía la función vieja)
+        $filters = [
+            "C.FECHA >= :from_date",                 // rango de fechas
+            "C.ID_TIPO_DOCUMENTO IN (20,21,12,13)",  // tipos de documento
+            "C.CANCELADA = 0",                       // no canceladas
+            "C.ID_USUARIO_AUTORIZA IS NOT NULL",     // autorizadas
+            "C.ID_USUARIO_AUTORIZA <> 0",            // autorizadas (no 0)
+            "ENT.ID_ORDEN_ENTRADA IS NULL"          // SIN entrada de almacén = ORDEN NUEVA
+        ];
 
-        $providerIds = array_values(array_unique(array_filter(array_map('intval', $providerIds), static fn($id) => $id > 0)));
+        $params = [
+            ':from_date' => $fromDate,
+        ];
+
+        // Normalizar IDs de proveedor
+        $providerIds = array_values(array_unique(array_filter(
+            array_map('intval', $providerIds),
+            static fn($id) => $id > 0
+        )));
+
         if (!empty($providerIds)) {
             $placeholders = [];
             foreach ($providerIds as $index => $providerId) {
@@ -190,35 +203,87 @@ class Orders
             $filters[] = 'C.ID_PROVEEDOR IN (' . implode(', ', $placeholders) . ')';
         }
 
+        // Búsqueda SUPER por LIKE
+        // 🔍 Búsqueda SUPER amplia
+        // Búsqueda SUPER amplia
         if ($search !== '') {
             $searchClauses = [];
-            if (ctype_digit(str_replace([' ', '-', '#'], '', $search))) {
-                $searchClauses[] = 'C.FOLIO = :search_exact';
-                $searchClauses[] = 'C.ID_COMPRA = :search_exact';
-                $params[':search_exact'] = (int)preg_replace('/[^0-9]/', '', $search);
+
+            // 1) Normalizar y limitar longitud para evitar desmadres con Firebird
+            $upperSearch = strtoupper($search);
+            if (strlen($upperSearch) > 90) {
+                $upperSearch = substr($upperSearch, 0, 90);
             }
-            $params[':search_text'] = '%' . strtoupper($search) . '%';
-            $searchClauses[] = 'UPPER(CP.RAZON_SOCIAL) LIKE :search_text';
-            $searchClauses[] = 'UPPER(CP.NUMERO_PROVEEDOR) LIKE :search_text';
-            $searchClauses[] = 'UPPER(T.NOMBRE_CORTO) LIKE :search_text';
+            $needle = '%' . $upperSearch . '%';
+
+            $i = 1;
+
+            $addLike = function (string $expressionBase) use (&$i, &$params, $needle, &$searchClauses) {
+                $paramName = ':search_text_' . $i++;
+                $params[$paramName] = $needle;
+                $searchClauses[] = str_replace(':search_text', $paramName, $expressionBase);
+            };
+
+            // 🔢 Campos numéricos como texto (largo cómodo)
+            $addLike("CAST(C.FOLIO AS VARCHAR(120)) LIKE :search_text");
+            $addLike("CAST(C.ID_COMPRA AS VARCHAR(120)) LIKE :search_text");
+
+            // 👤 Proveedor
+            $addLike("UPPER(CAST(CP.RAZON_SOCIAL AS VARCHAR(120))) LIKE :search_text");
+            $addLike("UPPER(CAST(CP.NUMERO_PROVEEDOR AS VARCHAR(120))) LIKE :search_text");
+
+            // 🏬 Tienda
+            $addLike("UPPER(CAST(T.NOMBRE_CORTO AS VARCHAR(120))) LIKE :search_text");
+
+            // 🗓 Temporada / alias
+            $addLike("UPPER(CAST(TEM.ALIAS AS VARCHAR(120))) LIKE :search_text");
+            $addLike("UPPER(CAST(TEM.TEMPORADA AS VARCHAR(120))) LIKE :search_text");
+
+            // Serie
+            $addLike("UPPER(CAST(C.SERIE AS VARCHAR(120))) LIKE :search_text");
+
+            // 💡 Combinaciones tipo “folio visual” que ve el proveedor
+            // ALIAS-FOLIO
+            $addLike("UPPER(CAST(TEM.ALIAS || '-' || CAST(C.FOLIO AS VARCHAR(120)) AS VARCHAR(240))) LIKE :search_text");
+            // ALIAS FOLIO
+            $addLike("UPPER(CAST(TEM.ALIAS || ' ' || CAST(C.FOLIO AS VARCHAR(120)) AS VARCHAR(240))) LIKE :search_text");
+            // ALIAS-FOLIO TEMPORADA
+            $addLike("UPPER(CAST(TEM.ALIAS || '-' || CAST(C.FOLIO AS VARCHAR(120)) || ' ' || COALESCE(TEM.TEMPORADA, '') AS VARCHAR(360))) LIKE :search_text");
+
+            // 📍 Partes de lugar de entrega (tienda)
+            $addLike("UPPER(CAST(T.CALLE AS VARCHAR(120))) LIKE :search_text");
+            $addLike("UPPER(CAST(T.COLONIA AS VARCHAR(120))) LIKE :search_text");
+            $addLike("UPPER(CAST(T.MUNICIPIO AS VARCHAR(120))) LIKE :search_text");
+            $addLike("UPPER(CAST(T.CODIGO_POSTAL AS VARCHAR(120))) LIKE :search_text");
+
+            // 🏢 Partes de dirección del proveedor
+            $addLike("UPPER(CAST(CP.CALLE AS VARCHAR(120))) LIKE :search_text");
+            $addLike("UPPER(CAST(CP.COLONIA AS VARCHAR(120))) LIKE :search_text");
+            $addLike("UPPER(CAST(CP.MUNICIPIO AS VARCHAR(120))) LIKE :search_text");
+            $addLike("UPPER(CAST(CP.CIUDAD AS VARCHAR(120))) LIKE :search_text");
+            $addLike("UPPER(CAST(CP.CODIGO_POSTAL AS VARCHAR(120))) LIKE :search_text");
+
             $filters[] = '(' . implode(' OR ', $searchClauses) . ')';
         }
 
         $filterSql = $filters ? 'WHERE ' . implode(' AND ', $filters) : '';
 
+        // IMPORTANTE: incluir TBL_ENTRADA_ALMACEN ENT como en la función vieja
         $baseFrom = "
-            FROM TBL_COMPRAS C
-            INNER JOIN TBL_USUARIO U
-                ON C.ID_USUARIO_CAPTURA = U.ID_USUARIO
-            INNER JOIN TBL_USUARIO UA
-                ON C.ID_USUARIO_AUTORIZA = UA.ID_USUARIO
-            INNER JOIN TBL_COMPRAS_PROVEEDORES CP
-                ON C.ID_PROVEEDOR = CP.ID_PROVEEDOR
-            INNER JOIN TBL_TIENDA T
-                ON C.ID_TIENDA = T.ID_TIENDA
-            LEFT JOIN TBL_TEMPORADA TEM
-                ON C.ID_TEMPORADA = TEM.ID_TEMPORADA
-        ";
+                FROM TBL_COMPRAS C
+                LEFT JOIN TBL_ENTRADA_ALMACEN ENT
+                    ON C.ID_COMPRA = ENT.ID_COMPRA
+                INNER JOIN TBL_USUARIO U
+                    ON C.ID_USUARIO_CAPTURA = U.ID_USUARIO
+                INNER JOIN TBL_USUARIO UA
+                    ON C.ID_USUARIO_AUTORIZA = UA.ID_USUARIO
+                INNER JOIN TBL_COMPRAS_PROVEEDORES CP
+                    ON C.ID_PROVEEDOR = CP.ID_PROVEEDOR
+                LEFT JOIN TBL_TIENDA T
+                    ON C.ID_TIENDA = T.ID_TIENDA
+                LEFT JOIN TBL_TEMPORADA TEM
+                    ON C.ID_TEMPORADA = TEM.ID_TEMPORADA
+            ";
 
         $countSql = "SELECT COUNT(*) AS TOTAL {$baseFrom} {$filterSql}";
 
@@ -271,17 +336,20 @@ class Orders
             ORDER BY C.FECHA DESC, C.ID_COMPRA DESC
         ";
 
+        // Conteo total
         $countStmt = $this->db->prepare($countSql);
         $this->bindFilterParams($countStmt, $params);
         $countStmt->execute();
         $total = (int)$countStmt->fetchColumn();
 
+        // Datos paginados
         $stmt = $this->db->prepare($sql);
         $this->bindFilterParams($stmt, $params);
         $stmt->execute();
 
         $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
 
+        // Normalización
         $normalized = array_map(function (array $row): array {
             $fecha = $row['FECHA'] ?? null;
             if ($fecha instanceof \DateTimeInterface) {
@@ -342,6 +410,104 @@ class Orders
                 'total_pages' => (int)ceil($total / $perPage),
                 'from_date' => $fromDate,
             ],
+        ];
+    }
+
+    // GET /api/orders-nuevas/check
+    // En tu modelo de órdenes/compras
+    public function checkNewPurchaseOrders(
+        array $providerIds = [],
+        int $sinceId = 0,
+        int $days = 30
+    ): array {
+        // Limitar days
+        $days = max(1, min($days, 120));
+
+        $fromDate = (new \DateTimeImmutable())
+            ->modify(sprintf('-%d days', $days))
+            ->format('Y-m-d 00:00:00');
+
+        // Normalizar proveedores
+        $providerIds = array_values(array_unique(array_filter(
+            array_map('intval', $providerIds),
+            static fn($id) => $id > 0
+        )));
+
+        $filters = [
+            "C.FECHA >= :from_date",
+            "C.ID_TIPO_DOCUMENTO IN (20,21,12,13)",
+            "C.CANCELADA = 0",
+            "C.ID_USUARIO_AUTORIZA IS NOT NULL",
+            "C.ID_USUARIO_AUTORIZA <> 0",
+            "ENT.ID_ORDEN_ENTRADA IS NULL",
+        ];
+
+        $params = [
+            ':from_date' => $fromDate,
+        ];
+
+        if (!empty($providerIds)) {
+            $placeholders = [];
+            foreach ($providerIds as $index => $providerId) {
+                $key = ':provider_' . $index;
+                $placeholders[] = $key;
+                $params[$key] = $providerId;
+            }
+            $filters[] = 'C.ID_PROVEEDOR IN (' . implode(', ', $placeholders) . ')';
+        }
+
+        $whereSql = $filters ? 'WHERE ' . implode(' AND ', $filters) : '';
+
+        // 👇 SIEMPRE tomamos la compra MAS RECIENTE según los mismos filtros
+        $sql = "
+        SELECT FIRST 1
+            C.ID_COMPRA,
+            C.FECHA
+        FROM TBL_COMPRAS C
+        LEFT JOIN TBL_ENTRADA_ALMACEN ENT
+            ON C.ID_COMPRA = ENT.ID_COMPRA
+        {$whereSql}
+        ORDER BY C.FECHA DESC, C.ID_COMPRA DESC
+    ";
+
+        $stmt = $this->db->prepare($sql);
+
+        foreach ($params as $key => $value) {
+            $stmt->bindValue($key, $value);
+        }
+
+        $stmt->execute();
+        $row = $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+
+        // Si NO hay ninguna orden en ese rango → no hay nuevas
+        if ($row === null) {
+            return [
+                'has_new'   => false,
+                'latest_id' => $sinceId,
+                'row'       => null,
+            ];
+        }
+
+        $latestIdDb = (int)$row['ID_COMPRA'];
+
+        // Primera vez (sinceId = 0): podemos decidir que hay nuevas
+        if ($sinceId === 0) {
+            return [
+                'has_new'   => true,
+                'latest_id' => $latestIdDb,
+                'row'       => $row,
+            ];
+        }
+
+        // 👇 AQUÍ LA REGLA CLARA:
+        // - si el último ID en BD es MAYOR que el que tengo → hay nuevas
+        // - si es igual → NO hay nuevas
+        $hasNew = $latestIdDb !== $sinceId;
+
+        return [
+            'has_new'   => $hasNew,
+            'latest_id' => $latestIdDb,
+            'row'       => $row,
         ];
     }
 
