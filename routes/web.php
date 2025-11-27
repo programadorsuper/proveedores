@@ -47,6 +47,7 @@ $router->add($prefix . '/tickets/descargar', 'TicketsController@download', 'GET'
 $router->add($prefix . '/ordenes', 'OrdersController@index', 'GET', true);
 $router->add($prefix . '/ordenes/nuevas', 'OrdersController@nuevas', 'GET', true);
 $router->add($prefix . '/ordenes/backorder', 'OrdersController@backorder', 'GET', true);
+$router->add($prefix . '/ordenes/backorder/api', 'OrdersController@backordersJson', 'GET', true);
 $router->add($prefix . '/ordenes/backorder/detalle', 'OrdersController@detalleBackorder', 'GET', true);
 $router->add($prefix . '/ordenes/entradas', 'OrdersController@entradas', 'GET', true);
 $router->add($prefix . '/ordenes/detalle', 'OrdersController@detalle', 'GET', true);
@@ -60,9 +61,9 @@ $router->add($prefix . '/citas/listar', 'AppointmentsController@list', 'GET', tr
 $router->add($prefix . '/citas/crear', 'AppointmentsController@store', 'POST', true);
 $router->add($prefix . '/citas/cancelar', 'AppointmentsController@cancel', 'POST', true);
 
-$router->add('/citas/ordenes-disponibles', 'AppointmentsController@availableOrdersAjax', 'GET', true);
-$router->add('/citas/orden-resumen', 'AppointmentsController@orderSummaryAjax', 'GET', true);
-$router->add('/citas/orden-archivos', 'AppointmentsController@uploadOrderFilesAjax', 'POST', true);
+$router->add($prefix . '/citas/ordenes-disponibles', 'AppointmentsController@availableOrdersAjax', 'GET', true);
+$router->add($prefix . '/citas/orden-resumen', 'AppointmentsController@orderSummaryAjax', 'GET', true);
+$router->add($prefix . '/citas/orden-archivos', 'AppointmentsController@uploadOrderFilesAjax', 'POST', true);
 
 
 $router->add($prefix . '/exportaciones', 'ExportsController@index', 'GET', true);

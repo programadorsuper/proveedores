@@ -94,14 +94,14 @@ $formatStatus = static function (string $status): string {
                         </select>
                     </div>
 
-                    <div class="col-md-4">
+                    <!-- <div class="col-md-4">
                         <label class="form-label fw-semibold">Tipo de temporada / orden</label>
                         <select id="filterSeasonType" class="form-select">
                             <option value="">Selecciona el tipo…</option>
                             <option value="special">Especial – temporada ID 3 (alias S)</option>
                             <option value="normal">General – todas excepto especial (ID 3)</option>
                         </select>
-                    </div>
+                    </div> -->
 
                     <div class="col-md-2 d-flex align-items-end">
                         <button type="button" id="btnFilterOrders" class="btn btn-primary w-100">
@@ -190,172 +190,8 @@ $formatStatus = static function (string $status): string {
     </div>
 </div>
 
-
-<!-- ÓRDENES DISPONIBLES PARA CITA -->
-<div class="card card-flush border-0 shadow-sm mb-6">
-    <div class="card-header flex-wrap gap-3 align-items-center">
-        <div>
-            <h3 class="card-title fw-bold mb-1">Órdenes disponibles para cita</h3>
-            <span class="text-muted fs-8">
-                Se muestran órdenes sin entradas de almacén, autorizadas y dentro de los últimos 2 meses,
-                según la tienda y tipo de temporada seleccionados en el modal.
-            </span>
-        </div>
-        <div class="ms-auto text-end">
-            <?php if ($selectedStoreId > 0): ?>
-                <div class="text-muted fs-8">
-                    <strong>Tienda:</strong>
-                    <?php
-                    $storeName = 'N/D';
-                    foreach ($stores as $store) {
-                        if ((int)$store['ID_TIENDA'] === $selectedStoreId) {
-                            $storeName = $store['NOMBRE_CORTO'];
-                            break;
-                        }
-                    }
-                    ?>
-                    <?= htmlspecialchars($storeName, ENT_QUOTES, 'UTF-8') ?>
-                    <span class="mx-2">|</span>
-                    <strong>Tipo:</strong>
-                    <?= $selectedSeasonType === 'special'
-                        ? 'Especial (ID temporada 3)'
-                        : ($selectedSeasonType === 'normal' ? 'General (sin especial)' : '—') ?>
-                </div>
-            <?php else: ?>
-                <span class="text-muted fs-8">Abre el botón “Nueva cita” para elegir tienda y tipo de orden.</span>
-            <?php endif; ?>
-        </div>
-    </div>
-    <div class="card-body">
-        <?php if ($selectedStoreId <= 0): ?>
-            <p class="text-muted mb-0">
-                Aún no has seleccionado tienda ni tipo de temporada. Haz clic en <strong>Nueva cita</strong> para comenzar.
-            </p>
-        <?php elseif (!empty($availableOrders)): ?>
-            <div class="table-responsive">
-                <table class="table table-row-dashed align-middle">
-                    <thead class="text-muted fw-semibold">
-                    <tr>
-                        <th></th>
-                        <th>Folio</th>
-                        <th>Punto de entrega</th>
-                        <th>Alias</th>
-                        <th>Proveedor</th>
-                        <th>Fecha</th>
-                        <th class="text-end">Total</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    <?php foreach ($availableOrders as $order): ?>
-                        <tr>
-                            <td>
-                                <input
-                                    type="checkbox"
-                                    class="form-check-input"
-                                    name="order_ids[]"
-                                    value="<?= (int)$order['ID_COMPRA'] ?>"
-                                    form="newAppointmentForm"
-                                >
-                            </td>
-                            <td>
-                                <div class="fw-bold text-dark">#<?= htmlspecialchars($order['FOLIO'] ?? '', ENT_QUOTES, 'UTF-8') ?></div>
-                                <div class="text-muted small">ID <?= (int)$order['ID_COMPRA'] ?></div>
-                            </td>
-                            <td>
-                                <div class="fw-semibold"><?= htmlspecialchars($order['NOMBRE_CORTO'] ?? '', ENT_QUOTES, 'UTF-8') ?></div>
-                                <div class="text-muted small"><?= htmlspecialchars($order['LUGAR_ENTREGA'] ?? '', ENT_QUOTES, 'UTF-8') ?></div>
-                            </td>
-                            <td><?= htmlspecialchars('[' . ($order['ALIAS'] ?? '') . '] ' . ($order['TEMPORADA'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
-                            <td>
-                                <div class="fw-semibold"><?= htmlspecialchars($order['RAZON_SOCIAL'] ?? '', ENT_QUOTES, 'UTF-8') ?></div>
-                                <div class="text-muted small">Proveedor <?= htmlspecialchars($order['NUMERO_PROVEEDOR'] ?? '', ENT_QUOTES, 'UTF-8') ?></div>
-                            </td>
-                            <td><?= htmlspecialchars(substr((string)($order['FECHA'] ?? ''), 0, 19), ENT_QUOTES, 'UTF-8') ?></td>
-                            <td class="text-end fw-bold">$ <?= number_format((float)($order['TOTAL'] ?? 0), 2) ?></td>
-                        </tr>
-                    <?php endforeach; ?>
-                    </tbody>
-                </table>
-                <div class="text-muted fs-8 mt-2">
-                    Sólo se muestran órdenes nuevas sin entradas de almacén y dentro de los últimos 2 meses.
-                </div>
-            </div>
-        <?php else: ?>
-            <p class="text-muted mb-0">
-                No encontramos órdenes nuevas para la tienda y tipo seleccionados, o ya están reservadas en otra cita.
-            </p>
-        <?php endif; ?>
-    </div>
-</div>
-
-<!-- NUEVA CITA: FORM (USA LAS ÓRDENES SELECCIONADAS ARRIBA) -->
-<div class="card card-flush border-0 shadow-sm mb-6">
-    <div class="card-header flex-wrap gap-3 align-items-center">
-        <div>
-            <h3 class="card-title fw-bold mb-1">Datos de la nueva cita</h3>
-            <span class="text-muted fs-8">
-                Selecciona las órdenes en la tabla superior y captura fecha y horario para crear la cita.
-            </span>
-        </div>
-    </div>
-    <div class="card-body">
-        <form id="newAppointmentForm" method="post"
-              action="<?= htmlspecialchars(($basePath !== '' ? $basePath : '') . '/citas/crear', ENT_QUOTES, 'UTF-8') ?>"
-              class="row g-3">
-            <?php if (!empty($user['is_super_admin'])): ?>
-                <div class="col-md-3">
-                    <label class="form-label fw-semibold">Proveedor (ID)</label>
-                    <input type="number" name="provider_id" class="form-control" placeholder="ID proveedor" min="1">
-                    <small class="text-muted fs-8">Si lo dejas vacío se usará el proveedor asociado al usuario.</small>
-                </div>
-            <?php endif; ?>
-            <div class="col-md-3">
-                <label class="form-label fw-semibold">Fecha</label>
-                <input type="date" name="appointment_date" class="form-control" required min="<?= date('Y-m-d') ?>">
-            </div>
-            <div class="col-md-3">
-                <label class="form-label fw-semibold">Hora inicio (08:00–15:00)</label>
-                <input type="time" name="slot_start" class="form-control" required min="08:00" max="15:00" value="08:00">
-            </div>
-            <div class="col-md-3">
-                <label class="form-label fw-semibold">Hora fin</label>
-                <input type="time" name="slot_end" class="form-control" required min="08:00" max="15:00" value="09:00">
-            </div>
-            <div class="col-md-6">
-                <label class="form-label fw-semibold">Punto de entrega (opcional)</label>
-                <input type="text" name="delivery_point_name" class="form-control"
-                       placeholder="Si se deja vacío se tomará del primer documento seleccionado.">
-            </div>
-            <div class="col-md-3">
-                <label class="form-label fw-semibold">Código punto (opcional)</label>
-                <input type="text" name="delivery_point_code" class="form-control"
-                       placeholder="Si se deja vacío se tomará del primer documento.">
-            </div>
-            <div class="col-md-12">
-                <label class="form-label fw-semibold">Dirección / nota</label>
-                <textarea name="delivery_address" rows="2" class="form-control"
-                          placeholder="Dirección, referencias..."></textarea>
-            </div>
-            <div class="col-12">
-                <div class="alert alert-warning d-flex align-items-center">
-                    <i class="fa-solid fa-circle-exclamation me-2"></i>
-                    <div class="fs-8">
-                        La cita sólo se puede crear si todas las órdenes seleccionadas son del mismo punto de entrega.
-                        Si alguna orden es especial (alias S / temporada 3), todas las órdenes de la cita deben ser especiales.
-                    </div>
-                </div>
-            </div>
-            <div class="col-12">
-                <button class="btn btn-primary" type="submit">
-                    <i class="fa-solid fa-paper-plane me-2"></i>Guardar cita
-                </button>
-            </div>
-        </form>
-    </div>
-</div>
-
 <!-- LISTADO DE CITAS -->
-<div class="card card-flush border-0 shadow-sm">
+<div class="card card-flush border-0 shadow-sm py-3">
     <div class="card-header">
         <form method="get" class="d-flex flex-wrap gap-3 align-items-center w-100">
             <div class="flex-grow-1">

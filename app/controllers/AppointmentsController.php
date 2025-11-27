@@ -282,11 +282,10 @@ class AppointmentsController extends ProtectedController
         }
 
         $storeId    = (int)($_GET['store_id'] ?? 0);
-        $seasonType = (string)($_GET['season_type'] ?? '');
         $providerIds  = $this->context->providerIds();
         $isSuperAdmin = !empty($this->user['is_super_admin']);
 
-        if ($storeId < 0 || $seasonType === '') {
+        if ($storeId < 0) {
             $this->jsonResponse([
                 'success' => false,
                 'message' => 'Debes seleccionar tienda y tipo de temporada.',
@@ -301,7 +300,6 @@ class AppointmentsController extends ProtectedController
                 $providerIds,
                 [
                     'store_id'    => $storeId,
-                    'season_type' => $seasonType,
                 ],
                 $excludedIds,
                 $isSuperAdmin

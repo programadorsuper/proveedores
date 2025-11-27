@@ -2,10 +2,8 @@
 (function () {
     const filterBtn      = document.getElementById('btnFilterOrders');
     const storeSelect    = document.getElementById('filterStoreId');
-    const seasonSelect   = document.getElementById('filterSeasonType');
     const tbody          = document.getElementById('ordersAjaxTbody');
     const alertBox       = document.getElementById('ordersAjaxAlert');
-
     const orderFilesModalEl = document.getElementById('orderFilesModal');
     const orderFilesForm    = document.getElementById('orderFilesForm');
     const orderFilesIdInput = document.getElementById('orderFilesIdCompra');
@@ -32,17 +30,15 @@
             tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-8">Cargando órdenes…</td></tr>';
 
             const storeId    = storeSelect.value;
-            const seasonType = seasonSelect.value;
 
-            if (!storeId || !seasonType) {
-                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-8">Selecciona tienda y tipo de temporada.</td></tr>';
-                showAlert(alertBox, 'warning', 'Debes seleccionar tienda y tipo de temporada.');
+            if (!storeId) {
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-8">Selecciona tienda.</td></tr>';
+                showAlert(alertBox, 'warning', 'Debes seleccionar tienda');
                 return;
             }
 
             const url = (basePath ? basePath : '') +
-                '/citas/ordenes-disponibles?store_id=' + encodeURIComponent(storeId) +
-                '&season_type=' + encodeURIComponent(seasonType);
+                '/citas/ordenes-disponibles?store_id=' + encodeURIComponent(storeId);
 
             fetch(url, {
                 headers: {'X-Requested-With': 'XMLHttpRequest'}

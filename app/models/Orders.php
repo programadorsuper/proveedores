@@ -521,7 +521,8 @@ class Orders
         $conditions = [
             "C.ID_TIPO_DOCUMENTO IN (20,21,12,13)",
             "C.CANCELADA = 0",
-            "CAST(LEFT(C.FECHA, 10) AS DATE) >= :from_date"
+            "CAST(LEFT(C.FECHA, 10) AS DATE) >= :from_date",
+            "E.ID_ORDEN_ENTRADA IS NOT NULL"
         ];
         $params = [':from_date' => $fromDate];
 
@@ -601,6 +602,209 @@ class Orders
             return $row;
         }, $rows);
     }
+
+    public function getBackordersPaginated(array $providerIds = [], array $options = [], int $page = 1, int $perPage = 25): array
+    {
+        // Siempre 2 meses hacia atrás (fecha inicial)
+        $months = 2;
+        $fromDate = (new \DateTimeImmutable())
+            ->modify(sprintf('-%d months', $months))
+            ->format('Y-m-d');
+
+        // Si en tu base FECHA es TIMESTAMP, es común incluir hora
+        $fromDateTime = $fromDate . ' 00:00:00';
+
+        $search = trim((string)($options['search'] ?? ''));
+
+        // WHERE dinámico con parámetros POSICIONALES (?)
+        $conditions = [];
+        $bindValues = [];
+
+        // Condiciones base (sin parámetros)
+        $conditions[] = "C.ID_TIPO_DOCUMENTO IN (20,21,12,13)";
+        $conditions[] = "C.CANCELADA = 0";
+
+        // Fecha (considerando que C.FECHA es DATE/TIMESTAMP)
+        $conditions[] = "C.FECHA >= ?";
+        $bindValues[] = $fromDateTime;
+
+        // Debe existir orden de entrada
+        $conditions[] = "E.ID_ORDEN_ENTRADA IS NOT NULL";
+
+        // Filtro por proveedores (IN con ? ? ?)
+        if (!empty($providerIds)) {
+            $placeholders = array_fill(0, count($providerIds), '?');
+            $conditions[] = 'C.ID_PROVEEDOR IN (' . implode(', ', $placeholders) . ')';
+
+            foreach ($providerIds as $providerId) {
+                $bindValues[] = (int)$providerId;
+            }
+        }
+
+        // ===========================
+        // BUSCADOR SUPER AVANZADO
+        // ===========================
+        if ($search !== '') {
+            // Partimos el texto en palabras (por espacios)
+            $terms = preg_split('/\s+/', $search);
+            $terms = array_filter($terms, static fn($t) => $t !== '');
+
+            foreach ($terms as $term) {
+                $term = trim($term);
+                if ($term === '') {
+                    continue;
+                }
+
+                $orParts = [];
+
+                // FOLIO: buscamos que contenga el término
+                $orParts[]  = "C.FOLIO LIKE ?";
+                $bindValues[] = '%' . $term . '%';
+
+                // Nombre proveedor
+                $orParts[]  = "CP.RAZON_SOCIAL LIKE ?";
+                $bindValues[] = '%'.$term.'%';
+
+                // // Nombre tienda
+                $orParts[]  = "T.NOMBRE_CORTO LIKE ?";
+                $bindValues[] = '%'.$term.'%';
+
+                // Temporada y alias
+                $orParts[]  = "TEM.TEMPORADA LIKE ?";
+                $bindValues[] = '%'.$term.'%';
+
+                // $orParts[]  = "TEM.ALIAS LIKE ?";
+                // $bindValues[] = '%'.$term.'%';
+
+                $orParts[]   = "CP.NUMERO_PROVEEDOR LIKE ?";
+                $bindValues[] = '%'.$term.'%';
+
+                // Cada palabra genera un grupo ( ... ) y todos los grupos se AND-ean
+                $conditions[] = '(' . implode(' OR ', $orParts) . ')';
+            }
+        }
+
+        $where = '';
+        if (!empty($conditions)) {
+            $where = 'WHERE ' . implode(' AND ', $conditions);
+        }
+
+        // ---------------------------
+        // Paginación
+        // ---------------------------
+        $page    = max(1, (int)$page);
+        $perPage = max(1, (int)$perPage);
+        $offset  = ($page - 1) * $perPage;
+        $rowStart = $offset + 1;
+        $rowEnd   = $offset + $perPage;
+
+        $rowStart = max(1, (int)$rowStart);
+        $rowEnd   = max($rowStart, (int)$rowEnd);
+
+        // Parte común FROM + GROUP BY + HAVING
+        $fromGroupHaving = "
+        FROM TBL_COMPRAS C
+        INNER JOIN TBL_COMPRAS_DETALLE CD ON CD.ID_COMPRA = C.ID_COMPRA
+        INNER JOIN TBL_COMPRAS_PROVEEDORES CP ON CP.ID_PROVEEDOR = C.ID_PROVEEDOR
+        INNER JOIN TBL_TIENDA T ON T.ID_TIENDA = C.ID_TIENDA
+        LEFT JOIN TBL_TEMPORADA TEM ON TEM.ID_TEMPORADA = C.ID_TEMPORADA
+        LEFT JOIN TBL_ENTRADA_ALMACEN E ON E.ID_COMPRA = C.ID_COMPRA
+        LEFT JOIN TBL_ENTRADA_ALMACEN_DETALLE EDET ON EDET.ID_ORDEN_ENTRADA = E.ID_ORDEN_ENTRADA
+            AND EDET.ID_ARTICULO = CD.ID_ARTICULO
+        {$where}
+        GROUP BY
+            C.ID_COMPRA,
+            C.ID_TEMPORADA,
+            TEM.ALIAS,
+            TEM.TEMPORADA,
+            C.SERIE,
+            C.FOLIO,
+            C.FECHA,
+            CP.RAZON_SOCIAL,
+            CP.NUMERO_PROVEEDOR,
+            T.NOMBRE_CORTO
+        HAVING
+            SUM(COALESCE(EDET.CANTIDAD_RECIBIDA, 0)) < SUM(CD.CANTIDAD_SOLICITADA)
+            -- Si quieres que solo salgan compras con algo recibido, descomenta la siguiente línea:
+            -- AND SUM(COALESCE(EDET.CANTIDAD_RECIBIDA, 0)) > 0
+    ";
+
+        // ===========================
+        // 1) TOTAL DE REGISTROS
+        // ===========================
+        $sqlTotal = "
+        SELECT COUNT(*) AS TOTAL
+        FROM (
+            SELECT C.ID_COMPRA
+            {$fromGroupHaving}
+        ) X
+    ";
+
+        $stmtTotal = $this->db->prepare($sqlTotal);
+
+        // Bind POSICIONAL (1,2,3,...) con los mismos valores de $bindValues
+        foreach ($bindValues as $index => $value) {
+            $stmtTotal->bindValue($index + 1, $value);
+        }
+
+        $stmtTotal->execute();
+        $total = (int)($stmtTotal->fetchColumn() ?: 0);
+
+        // ===========================
+        // 2) LISTA PAGINADA
+        // ===========================
+        $sqlList = "
+            SELECT
+                C.ID_COMPRA,
+                C.ID_TEMPORADA,
+                TEM.ALIAS,
+                TEM.TEMPORADA,
+                C.SERIE,
+                C.FOLIO,
+                C.FECHA,
+                CP.RAZON_SOCIAL,
+                CP.NUMERO_PROVEEDOR,
+                T.NOMBRE_CORTO,
+                SUM(CD.CANTIDAD_SOLICITADA) AS TOTAL_SOLICITADO,
+                SUM(COALESCE(EDET.CANTIDAD_RECIBIDA, 0)) AS TOTAL_RECIBIDO
+            {$fromGroupHaving}
+            ORDER BY C.FECHA DESC
+            ROWS {$rowStart} TO {$rowEnd}
+        ";
+
+        $stmt = $this->db->prepare($sqlList);
+
+        // Misma secuencia de parámetros
+        foreach ($bindValues as $index => $value) {
+            $stmt->bindValue($index + 1, $value);
+        }
+
+        $stmt->execute();
+        $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+
+        // Post-proceso: totales y porcentajes
+        $items = array_map(static function (array $row): array {
+            $ordered  = (float)($row['TOTAL_SOLICITADO'] ?? 0);
+            $received = (float)($row['TOTAL_RECIBIDO'] ?? 0);
+            $pending  = max($ordered - $received, 0);
+            $percent  = $ordered > 0 ? round(($received / $ordered) * 100, 2) : 0;
+
+            $row['TOTAL_SOLICITADO'] = $ordered;
+            $row['TOTAL_RECIBIDO']   = $received;
+            $row['PENDING_TOTAL']    = $pending;
+            $row['PERCENT_RECEIVED'] = $percent;
+
+            return $row;
+        }, $rows);
+
+        return [
+            'items'    => $items,
+            'total'    => $total,
+            'page'     => $page,
+            'per_page' => $perPage,
+        ];
+    }
+
 
     public function getNewOrdersForAppointments(array $providerIds = [], array $filters = [], array $excludedIds = []): array
     {
@@ -751,11 +955,9 @@ class Orders
         bool $isSuperAdmin = false
     ): array {
         $storeId = (int)($filters['store_id'] ?? 0);
-        if ($storeId <= 0) {
+        if ($storeId < 0) {
             return [];
         }
-
-        $seasonType = (string)($filters['season_type'] ?? '');
 
         // 2 meses atrás
         $fromDate = (new \DateTimeImmutable('-2 months'))->format('Y-m-d');
@@ -773,13 +975,6 @@ class Orders
             ':from_date' => $fromDate,
             ':store_id'  => $storeId,
         ];
-
-        // Temporada especial vs normal
-        if ($seasonType === 'special') {
-            $conditions[] = "COM.ID_TEMPORADA = 3";
-        } elseif ($seasonType === 'normal') {
-            $conditions[] = "(COM.ID_TEMPORADA IS NULL OR COM.ID_TEMPORADA <> 3)";
-        }
 
         // Filtrar por proveedor si no es super admin
         $providerIds = array_values(array_unique(array_map('intval', $providerIds)));

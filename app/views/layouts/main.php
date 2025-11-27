@@ -110,6 +110,41 @@ $renderMenu = static function (array $items, string $basePath, string $current) 
         <link rel="stylesheet" href="<?= htmlspecialchars($style, ENT_QUOTES, 'UTF-8') ?>">
     <?php endforeach; ?>
 </head>
+<style>
+    .global-loading {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+    }
+
+    .global-loading-backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.45);
+        backdrop-filter: blur(3px);
+    }
+
+    .global-loading-box {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        padding: 0.75rem 1.5rem;
+        border-radius: 999px;
+        background: #fff;
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.3);
+        font-size: 0.9rem;
+        pointer-events: auto;
+    }
+
+    .global-loading.d-none {
+        display: none;
+    }
+</style>
 
 <body id="kt_body" class="header-fixed header-tablet-and-mobile-fixed toolbar-enabled toolbar-fixed toolbar-tablet-and-mobile-fixed aside-enabled aside-fixed" style="--kt-toolbar-height:55px;--kt-toolbar-height-tablet-and-mobile:55px">
     <div class="d-flex flex-column flex-root">
@@ -212,14 +247,54 @@ $renderMenu = static function (array $items, string $basePath, string $current) 
             </div>
         </div>
     </div>
+    <div id="global-loading" class="global-loading d-none">
+        <div class="global-loading-backdrop"></div>
+        <div class="global-loading-box">
+            <div class="spinner-border" role="status" aria-hidden="true"></div>
+            <span class="ms-2">Cargando...</span>
+        </div>
+    </div>
+
     <script>
         const basePath = <?= json_encode($basePath ?? '', JSON_UNESCAPED_SLASHES) ?>;
     </script>
     <script src="<?= htmlspecialchars($themeAssets . '/plugins/global/plugins.bundle.js', ENT_QUOTES, 'UTF-8') ?>"></script>
     <script src="<?= htmlspecialchars(($basePath !== '' ? $basePath : '') . '/assets/plugins/apexcharts/apexcharts.min.js', ENT_QUOTES, 'UTF-8') ?>"></script>
     <script src="<?= htmlspecialchars($themeAssets . '/js/scripts.bundle.js', ENT_QUOTES, 'UTF-8') ?>"></script>
+    <script>
+        // Loader global
+        window.AppLoading = (function() {
+            const el = document.getElementById("global-loading");
+            let counter = 0;
+
+            function show() {
+                if (!el) return;
+                counter++;
+                el.classList.remove("d-none");
+            }
+
+            function hide() {
+                if (!el) return;
+                counter = Math.max(0, counter - 1);
+                if (counter === 0) {
+                    el.classList.add("d-none");
+                }
+            }
+
+            function reset() {
+                counter = 0;
+                if (el) el.classList.add("d-none");
+            }
+
+            return {
+                show,
+                hide,
+                reset
+            };
+        })();
+    </script>
     <?php foreach ($pageScripts as $script): ?>
-        <script src="<?=  htmlspecialchars(($basePath !== '' ? $basePath : '')) ?>/assets/js/<?= htmlspecialchars($script, ENT_QUOTES, 'UTF-8'). '?time=' . time(); ?>"></script>
+        <script src="<?= htmlspecialchars(($basePath !== '' ? $basePath : '')) ?>/assets/js/<?= htmlspecialchars($script, ENT_QUOTES, 'UTF-8') . '?time=' . time(); ?>"></script>
     <?php endforeach; ?>
 </body>
 

@@ -8,12 +8,14 @@ class OrdersController extends ProtectedController
 {
     protected Orders $orders;
     protected OrderViews $orderViews;
+    protected string $basePath;
 
     public function __construct()
     {
         parent::__construct();
         $this->orders = new Orders();
         $this->orderViews = new OrderViews();
+        $this->basePath = $this->config['base_path'] ?? ($this->config['base_url'] ?? '');
     }
     public function index(): void
     {
@@ -160,22 +162,59 @@ class OrdersController extends ProtectedController
         // placeholder para que no truene si no lo has hecho aún:
         return [];
     }
+    // OrdersController.php
+
     public function backorder(): void
     {
         $isSuperAdmin = !empty($this->user['is_super_admin']);
         $providerIds = $isSuperAdmin ? [] : $this->context->providerIds();
-        $filters = [
-            'months' => (int)($_GET['months'] ?? 2),
-            'search' => trim((string)($_GET['search'] ?? '')),
-        ];
 
-        $backorders = $this->orders->getBackorders($providerIds, $filters);
+        // Solo para que la vista sepa si hay filtros por proveedor
+        $hasProviderFilter = !$isSuperAdmin && !empty($providerIds);
 
         $this->renderModule('orders/backorders', [
             'title' => 'Backorders',
-            'backorders' => $backorders,
-            'filters' => $filters,
+            'pageScripts' => ['/orders-backorders.js'],
+            'backordersConfig' => [
+                'endpoints' => [
+                    'list' => $this->basePath . '/ordenes/backorder/api',
+                ],
+                'hasProviderFilter' => $hasProviderFilter,
+                'defaultPerPage'    => 25,
+            ],
         ], 'orders');
+    }
+
+    public function backordersJson(): void
+    {
+        $isSuperAdmin = !empty($this->user['is_super_admin']);
+        $providerIds = $isSuperAdmin ? [] : $this->context->providerIds();
+
+        $page    = max(1, (int)($_GET['page'] ?? 1));
+        $perPage = (int)($_GET['per_page'] ?? 25);
+        if ($perPage <= 0) {
+            $perPage = 25;
+        }
+        if ($perPage > 200) {
+            $perPage = 200;
+        }
+
+        $filters = [
+            // siempre 2 meses (ya no viene de la vista)
+            'months' => 2,
+            'search' => trim((string)($_GET['search'] ?? '')),
+        ];
+
+        $result = $this->orders->getBackordersPaginated($providerIds, $filters, $page, $perPage);
+        $json = [
+            'items'    => $result['items'],
+            'total'    => $result['total'],
+            'page'     => $result['page'],
+            'per_page' => $result['per_page'],
+        ];
+
+        header('Content-Type: application/json');
+        echo json_encode($json);
     }
 
     public function entradas(): void
