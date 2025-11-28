@@ -28,7 +28,7 @@ class OrdersController extends ProtectedController
         // echo json_encode($user);
         // exit;
         $assetBase = $this->assetBase();
-        $detailUrl = $this->moduleUrl('/ordenes/detalle');
+        $detailUrl = $this->moduleUrl('/ordenes/{id}/detalle');
 
         $this->renderOrdersPage('Ordenes nuevas', 'nuevas', [
             'filters' => [
@@ -38,7 +38,7 @@ class OrdersController extends ProtectedController
             'ordersConfig' => [
                 'listEndpoint' => $this->moduleUrl('/ordenes/listar'),
                 'markSeenEndpoint' => $this->moduleUrl('/ordenes/marcar-vista'),
-                'exportEndpoint' => $this->moduleUrl('/ordenes/exportar'),
+                'exportEndpoint' => $this->moduleUrl('/ordenes/{id}/exportar'),
                 'detailEndpoint' => $detailUrl,
                 'checkNewEndpoint'  => $this->moduleUrl('/ordenes/nuevas/check'),
             ],
@@ -178,6 +178,7 @@ class OrdersController extends ProtectedController
             'backordersConfig' => [
                 'endpoints' => [
                     'list' => $this->basePath . '/ordenes/backorder/api',
+                    'detail' => $this->moduleUrl('/ordenes/backorder/{id}/detalle'),
                 ],
                 'hasProviderFilter' => $hasProviderFilter,
                 'defaultPerPage'    => 25,
@@ -222,9 +223,8 @@ class OrdersController extends ProtectedController
         $this->renderOrdersPage('Ordenes con entrada', 'entradas');
     }
 
-    public function detalleBackorder(): void
+    public function detalleBackorder(int $orderId): void
     {
-        $orderId = (int)($_GET['id'] ?? 0);
         if ($orderId <= 0) {
             http_response_code(404);
             echo 'Backorder no encontrado';
@@ -266,9 +266,8 @@ class OrdersController extends ProtectedController
         ], 'orders');
     }
 
-    public function detalle(): void
+    public function detalle(int $orderId): void
     {
-        $orderId = (int)($_GET['id'] ?? 0);
         if ($orderId <= 0) {
             http_response_code(404);
             echo 'Orden no encontrada';
@@ -296,7 +295,7 @@ class OrdersController extends ProtectedController
             'title' => 'Orden #' . ($order['FOLIO'] ?? $orderId),
             'order' => $order,
             'items' => $items,
-            'downloadBase' => $this->moduleUrl('/ordenes/exportar'),
+            'downloadBase' => $this->moduleUrl('/ordenes/{id}/exportar'),
         ], 'orders');
     }
 
@@ -340,10 +339,9 @@ class OrdersController extends ProtectedController
         }
     }
 
-    public function export(): void
+    public function export(int $orderId): void
     {
         try {
-            $orderId = (int)($_GET['id'] ?? 0);
             $format = strtolower((string)($_GET['format'] ?? 'pdf'));
             if ($orderId <= 0) {
                 $this->jsonResponse(['error' => 'ID de orden requerido'], 422);

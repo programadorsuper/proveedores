@@ -1,0 +1,613 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<cfdi:Comprobante xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xmlns:cfdi="http://www.sat.gob.mx/cfd/4"
+                  xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd"
+                  Version="4.0"
+                  Serie="C"
+                  Folio="67890"
+                  Fecha="2025-11-28T11:00:00"
+                  SubTotal="190105.12"
+                  Moneda="MXN"
+                  Total="220521.93"
+                  TipoDeComprobante="I"
+                  Exportacion="01"
+                  LugarExpedicion="54769">
+  <cfdi:Emisor Rfc="AAA010101AAA"
+               Nombre="PROVEEDOR DEMO SA DE CV"
+               RegimenFiscal="601"/>
+  <cfdi:Receptor Rfc="BBB010101BBB"
+                 Nombre="SUPER PAPELERA SA DE CV"
+                 DomicilioFiscalReceptor="54769"
+                 RegimenFiscalReceptor="601"
+                 UsoCFDI="G01"/>
+  <cfdi:Conceptos>
+    <cfdi:Concepto ClaveProdServ="14111506"
+                   NoIdentificacion="AA-12P"
+                   Cantidad="144.00"
+                   ClaveUnidad="H87"
+                   Unidad="PZA"
+                   Descripcion="ACUARELA AINK C/12 COL AA-12P"
+                   ValorUnitario="19.1500"
+                   Importe="2757.60"
+                   ObjetoImp="02">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="2757.60"
+                         Impuesto="002"
+                         TipoFactor="Tasa"
+                         TasaOCuota="0.160000"
+                         Importe="441.22"/>
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+
+    <cfdi:Concepto ClaveProdServ="14111506"
+                   NoIdentificacion="APAD6E"
+                   Cantidad="48.00"
+                   ClaveUnidad="H87"
+                   Unidad="PZA"
+                   Descripcion="PLUMON DELGADO AQUA-INK C/6 SURT APAD6E"
+                   ValorUnitario="10.5200"
+                   Importe="504.96"
+                   ObjetoImp="02">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="504.96"
+                         Impuesto="002"
+                         TipoFactor="Tasa"
+                         TasaOCuota="0.160000"
+                         Importe="80.79"/>
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+
+    <cfdi:Concepto ClaveProdServ="14111506"
+                   NoIdentificacion="APAD12E"
+                   Cantidad="72.00"
+                   ClaveUnidad="H87"
+                   Unidad="PZA"
+                   Descripcion="PLUMON DELGADO AQUA-INK C/12 COLORES SURTIDOS APAD12E"
+                   ValorUnitario="19.8500"
+                   Importe="1429.20"
+                   ObjetoImp="02">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="1429.20"
+                         Impuesto="002"
+                         TipoFactor="Tasa"
+                         TasaOCuota="0.160000"
+                         Importe="228.67"/>
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+
+    <cfdi:Concepto ClaveProdServ="14111506"
+                   NoIdentificacion="APAD24E"
+                   Cantidad="18.00"
+                   ClaveUnidad="H87"
+                   Unidad="PZA"
+                   Descripcion="PLUMON DELGADO AQUA-INK C/24 SURT APAD24"
+                   ValorUnitario="37.9500"
+                   Importe="683.10"
+                   ObjetoImp="02">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="683.10"
+                         Impuesto="002"
+                         TipoFactor="Tasa"
+                         TasaOCuota="0.160000"
+                         Importe="109.30"/>
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+
+    <cfdi:Concepto ClaveProdServ="14111506"
+                   NoIdentificacion="APAD100S"
+                   Cantidad="6.00"
+                   ClaveUnidad="XPK"
+                   Unidad="PAQ"
+                   Descripcion="PLUMON DELGADO AQUA-INK C/100 APAD100S SURTIDO"
+                   ValorUnitario="185.0300"
+                   Importe="1110.18"
+                   ObjetoImp="02">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="1110.18"
+                         Impuesto="002"
+                         TipoFactor="Tasa"
+                         TasaOCuota="0.160000"
+                         Importe="177.63"/>
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+
+    <cfdi:Concepto ClaveProdServ="14111506"
+                   NoIdentificacion="APAD12N"
+                   Cantidad="288.00"
+                   ClaveUnidad="H87"
+                   Unidad="PZA"
+                   Descripcion="PLUMON DELGADO AQUA-INK APAD12 NEGRO"
+                   ValorUnitario="1.6700"
+                   Importe="480.96"
+                   ObjetoImp="02">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="480.96"
+                         Impuesto="002"
+                         TipoFactor="Tasa"
+                         TasaOCuota="0.160000"
+                         Importe="76.95"/>
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+
+    <cfdi:Concepto ClaveProdServ="14111506"
+                   NoIdentificacion="APAD12R"
+                   Cantidad="144.00"
+                   ClaveUnidad="H87"
+                   Unidad="PZA"
+                   Descripcion="PLUMON DELGADO AQUA-INK APAD12 ROJO"
+                   ValorUnitario="1.6700"
+                   Importe="240.48"
+                   ObjetoImp="02">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="240.48"
+                         Impuesto="002"
+                         TipoFactor="Tasa"
+                         TasaOCuota="0.160000"
+                         Importe="38.48"/>
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+
+    <cfdi:Concepto ClaveProdServ="14111506"
+                   NoIdentificacion="APAD12V"
+                   Cantidad="24.00"
+                   ClaveUnidad="H87"
+                   Unidad="PZA"
+                   Descripcion="PLUMON DELGADO AQUA-INK APAD12 VERDE"
+                   ValorUnitario="1.6700"
+                   Importe="40.08"
+                   ObjetoImp="02">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="40.08"
+                         Impuesto="002"
+                         TipoFactor="Tasa"
+                         TasaOCuota="0.160000"
+                         Importe="6.41"/>
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+
+    <cfdi:Concepto ClaveProdServ="14111506"
+                   NoIdentificacion="AHB-6P"
+                   Cantidad="36.00"
+                   ClaveUnidad="XPK"
+                   Unidad="PAQ"
+                   Descripcion="MARCATEXTOS PASTEL AINK C/6 AHB-6P"
+                   ValorUnitario="30.0300"
+                   Importe="1081.08"
+                   ObjetoImp="02">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="1081.08"
+                         Impuesto="002"
+                         TipoFactor="Tasa"
+                         TasaOCuota="0.160000"
+                         Importe="172.97"/>
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+
+    <cfdi:Concepto ClaveProdServ="14111506"
+                   NoIdentificacion="AHC-12E"
+                   Cantidad="12.00"
+                   ClaveUnidad="XPK"
+                   Unidad="PAQ"
+                   Descripcion="MARCATEXTOS A-INK C/12 PASTEL AHC-12E"
+                   ValorUnitario="61.7800"
+                   Importe="741.36"
+                   ObjetoImp="02">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="741.36"
+                         Impuesto="002"
+                         TipoFactor="Tasa"
+                         TasaOCuota="0.160000"
+                         Importe="118.62"/>
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+
+    <cfdi:Concepto ClaveProdServ="14111506"
+                   NoIdentificacion="APC-12P"
+                   Cantidad="216.00"
+                   ClaveUnidad="XPK"
+                   Unidad="PAQ"
+                   Descripcion="MARCADOR PUNTA CONICA C/12 SURT PASTEL APC-12P"
+                   ValorUnitario="29.6300"
+                   Importe="6400.08"
+                   ObjetoImp="02">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="6400.08"
+                         Impuesto="002"
+                         TipoFactor="Tasa"
+                         TasaOCuota="0.160000"
+                         Importe="1024.01"/>
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+
+    <cfdi:Concepto ClaveProdServ="14111506"
+                   NoIdentificacion="APC-12"
+                   Cantidad="72.00"
+                   ClaveUnidad="XPK"
+                   Unidad="PAQ"
+                   Descripcion="MARCADOR PUNTA CONICA C/12 SURTIDO APC-12"
+                   ValorUnitario="29.6300"
+                   Importe="2133.36"
+                   ObjetoImp="02">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="2133.36"
+                         Impuesto="002"
+                         TipoFactor="Tasa"
+                         TasaOCuota="0.160000"
+                         Importe="341.34"/>
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+
+    <cfdi:Concepto ClaveProdServ="14111506"
+                   NoIdentificacion="EK-109N"
+                   Cantidad="3528.00"
+                   ClaveUnidad="H87"
+                   Unidad="PZA"
+                   Descripcion="MARCADOR PERMANENTE CINCEL EK109 NEGRO"
+                   ValorUnitario="9.4900"
+                   Importe="33480.72"
+                   ObjetoImp="02">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="33480.72"
+                         Impuesto="002"
+                         TipoFactor="Tasa"
+                         TasaOCuota="0.160000"
+                         Importe="5356.92"/>
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+
+    <cfdi:Concepto ClaveProdServ="14111506"
+                   NoIdentificacion="EK-109A"
+                   Cantidad="192.00"
+                   ClaveUnidad="H87"
+                   Unidad="PZA"
+                   Descripcion="MARCADOR PERMANENTE CINCEL EK109 AZUL"
+                   ValorUnitario="9.4900"
+                   Importe="1822.08"
+                   ObjetoImp="02">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="1822.08"
+                         Impuesto="002"
+                         TipoFactor="Tasa"
+                         TasaOCuota="0.160000"
+                         Importe="291.53"/>
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+
+    <cfdi:Concepto ClaveProdServ="14111506"
+                   NoIdentificacion="EK-109V"
+                   Cantidad="216.00"
+                   ClaveUnidad="H87"
+                   Unidad="PZA"
+                   Descripcion="MARCADOR PERMANENTE CINCEL EK109 VERDE"
+                   ValorUnitario="9.4900"
+                   Importe="2049.84"
+                   ObjetoImp="02">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="2049.84"
+                         Impuesto="002"
+                         TipoFactor="Tasa"
+                         TasaOCuota="0.160000"
+                         Importe="327.97"/>
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+
+    <cfdi:Concepto ClaveProdServ="14111506"
+                   NoIdentificacion="EK-109R"
+                   Cantidad="108.00"
+                   ClaveUnidad="H87"
+                   Unidad="PZA"
+                   Descripcion="MARCADOR PERMANENTE CINCEL EK109 ROJO"
+                   ValorUnitario="9.4900"
+                   Importe="1024.92"
+                   ObjetoImp="02">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="1024.92"
+                         Impuesto="002"
+                         TipoFactor="Tasa"
+                         TasaOCuota="0.160000"
+                         Importe="163.99"/>
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+
+    <cfdi:Concepto ClaveProdServ="14111506"
+                   NoIdentificacion="APB12-N"
+                   Cantidad="1728.00"
+                   ClaveUnidad="H87"
+                   Unidad="PZA"
+                   Descripcion="MARCADOR PERMANENTE APB12 NEGRO"
+                   ValorUnitario="4.0200"
+                   Importe="6946.56"
+                   ObjetoImp="02">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="6946.56"
+                         Impuesto="002"
+                         TipoFactor="Tasa"
+                         TasaOCuota="0.160000"
+                         Importe="1111.45"/>
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+
+    <cfdi:Concepto ClaveProdServ="14111506"
+                   NoIdentificacion="APB12-A"
+                   Cantidad="216.00"
+                   ClaveUnidad="H87"
+                   Unidad="PZA"
+                   Descripcion="MARCADOR PERMANENTE APB12 AZUL"
+                   ValorUnitario="4.0200"
+                   Importe="868.32"
+                   ObjetoImp="02">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="868.32"
+                         Impuesto="002"
+                         TipoFactor="Tasa"
+                         TasaOCuota="0.160000"
+                         Importe="138.93"/>
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+
+    <cfdi:Concepto ClaveProdServ="14111506"
+                   NoIdentificacion="APB12-R"
+                   Cantidad="216.00"
+                   ClaveUnidad="H87"
+                   Unidad="PZA"
+                   Descripcion="MARCADOR PERMANENTE APB12 ROJO"
+                   ValorUnitario="4.0200"
+                   Importe="868.32"
+                   ObjetoImp="02">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="868.32"
+                         Impuesto="002"
+                         TipoFactor="Tasa"
+                         TasaOCuota="0.160000"
+                         Importe="138.93"/>
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+
+    <cfdi:Concepto ClaveProdServ="14111506"
+                   NoIdentificacion="EK-230N/4PSH2"
+                   Cantidad="12.00"
+                   ClaveUnidad="XPK"
+                   Unidad="PAQ"
+                   Descripcion="ESTILOGRAFO C/4 (0.2, 0.4, 0.6, 0.8) EK230N/4PSH2 NEGRO"
+                   ValorUnitario="105.6600"
+                   Importe="1267.92"
+                   ObjetoImp="02">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="1267.92"
+                         Impuesto="002"
+                         TipoFactor="Tasa"
+                         TasaOCuota="0.160000"
+                         Importe="202.87"/>
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+
+    <cfdi:Concepto ClaveProdServ="14111506"
+                   NoIdentificacion="EK-230N/4PSH1"
+                   Cantidad="24.00"
+                   ClaveUnidad="XPK"
+                   Unidad="PAQ"
+                   Descripcion="ESTILOGRAFO C/4 (0.1, 0.3, 0.5, 0.7) EK230N/4PSH1 NEGRO"
+                   ValorUnitario="105.6600"
+                   Importe="2535.84"
+                   ObjetoImp="02">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="2535.84"
+                         Impuesto="002"
+                         TipoFactor="Tasa"
+                         TasaOCuota="0.160000"
+                         Importe="405.73"/>
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+
+    <cfdi:Concepto ClaveProdServ="14111506"
+                   NoIdentificacion="ACLP4-12"
+                   Cantidad="384.00"
+                   ClaveUnidad="H87"
+                   Unidad="PZA"
+                   Descripcion="CORRECTOR TIPO PLUMA MINI 4ML ACLP4-12"
+                   ValorUnitario="4.5900"
+                   Importe="1762.56"
+                   ObjetoImp="02">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="1762.56"
+                         Impuesto="002"
+                         TipoFactor="Tasa"
+                         TasaOCuota="0.160000"
+                         Importe="282.01"/>
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+
+    <cfdi:Concepto ClaveProdServ="14111506"
+                   NoIdentificacion="ACLP8-12"
+                   Cantidad="1308.00"
+                   ClaveUnidad="H87"
+                   Unidad="PZA"
+                   Descripcion="CORRECTOR TIPO PLUMA AINK 8ML ACLP8-12"
+                   ValorUnitario="6.3200"
+                   Importe="8266.56"
+                   ObjetoImp="02">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="8266.56"
+                         Impuesto="002"
+                         TipoFactor="Tasa"
+                         TasaOCuota="0.160000"
+                         Importe="1322.65"/>
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+
+    <cfdi:Concepto ClaveProdServ="14111506"
+                   NoIdentificacion="CBP-12"
+                   Cantidad="168.00"
+                   ClaveUnidad="H87"
+                   Unidad="PZA"
+                   Descripcion="CORRECTOR LIQUIDO BROCHA/PLUMA 15ML CBP"
+                   ValorUnitario="9.0800"
+                   Importe="1525.44"
+                   ObjetoImp="02">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="1525.44"
+                         Impuesto="002"
+                         TipoFactor="Tasa"
+                         TasaOCuota="0.160000"
+                         Importe="244.07"/>
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+
+    <cfdi:Concepto ClaveProdServ="14111506"
+                   NoIdentificacion="ASB-7"
+                   Cantidad="1000.00"
+                   ClaveUnidad="XPK"
+                   Unidad="PAQ"
+                   Descripcion="SILICON BARRA DELGADA ASB-7 KILO"
+                   ValorUnitario="70.5700"
+                   Importe="70570.00"
+                   ObjetoImp="02">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="70570.00"
+                         Impuesto="002"
+                         TipoFactor="Tasa"
+                         TasaOCuota="0.160000"
+                         Importe="11291.20"/>
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+
+    <cfdi:Concepto ClaveProdServ="14111506"
+                   NoIdentificacion="P2CH10"
+                   Cantidad="96.00"
+                   ClaveUnidad="H87"
+                   Unidad="PZA"
+                   Descripcion="PERFORADORA METALICA 2 ORIF 10HJS P2CH10"
+                   ValorUnitario="32.1800"
+                   Importe="3089.28"
+                   ObjetoImp="02">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="3089.28"
+                         Impuesto="002"
+                         TipoFactor="Tasa"
+                         TasaOCuota="0.160000"
+                         Importe="494.29"/>
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+
+    <cfdi:Concepto ClaveProdServ="14111506"
+                   NoIdentificacion="P2G30"
+                   Cantidad="48.00"
+                   ClaveUnidad="H87"
+                   Unidad="PZA"
+                   Descripcion="PERFORADORA METALICA 2 ORIF 30HJS P2G30"
+                   ValorUnitario="97.5900"
+                   Importe="4684.32"
+                   ObjetoImp="02">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="4684.32"
+                         Impuesto="002"
+                         TipoFactor="Tasa"
+                         TasaOCuota="0.160000"
+                         Importe="749.49"/>
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+
+    <cfdi:Concepto ClaveProdServ="14111506"
+                   NoIdentificacion="PA-20T"
+                   Cantidad="120.00"
+                   ClaveUnidad="H87"
+                   Unidad="PZA"
+                   Descripcion="PLASTICO PVC AINK 45X20 TRANS PA-20T"
+                   ValorUnitario="85.0000"
+                   Importe="10200.00"
+                   ObjetoImp="02">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="10200.00"
+                         Impuesto="002"
+                         TipoFactor="Tasa"
+                         TasaOCuota="0.160000"
+                         Importe="1632.00"/>
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+
+    <cfdi:Concepto ClaveProdServ="14111506"
+                   NoIdentificacion="PH-100DB"
+                   Cantidad="600.00"
+                   ClaveUnidad="XPK"
+                   Unidad="PAQ"
+                   Descripcion="PROTECTOR DE HOJAS CARTA C/100 PH-100DB"
+                   ValorUnitario="35.9000"
+                   Importe="21540.00"
+                   ObjetoImp="02">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="21540.00"
+                         Impuesto="002"
+                         TipoFactor="Tasa"
+                         TasaOCuota="0.160000"
+                         Importe="3446.40"/>
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+
+  </cfdi:Conceptos>
+  <cfdi:Impuestos TotalImpuestosTrasladados="30416.81">
+    <cfdi:Traslados>
+      <cfdi:Traslado Impuesto="002"
+                     TipoFactor="Tasa"
+                     TasaOCuota="0.160000"
+                     Importe="30416.81"/>
+    </cfdi:Traslados>
+  </cfdi:Impuestos>
+</cfdi:Comprobante>

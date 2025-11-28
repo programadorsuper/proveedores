@@ -124,7 +124,7 @@
         const folio = row.FOLIO ?? row.folio ?? "";
         const razonSocial = row.RAZON_SOCIAL ?? row.razon_social ?? "";
         const numProv = row.NUMERO_PROVEEDOR ?? row.numero_proveedor ?? "";
-        const tienda = row.NOMBRE_CORTO ?? row.nombre_corto ?? "N/D";
+        const tienda = row.LUGAR_ENTREGA ?? row.lugar_entrega ?? "N/D";
         const alias = (row.ALIAS ?? row.alias ?? "").trim();
         const temporada = (row.TEMPORADA ?? row.temporada ?? "").trim();
         const fechaRaw = String(row.FECHA ?? row.fecha ?? "");
@@ -145,8 +145,7 @@
         const progressWidth = Math.min(100, Math.max(0, percent));
         const progressClass = percent >= 90 ? "bg-success" : "bg-warning";
 
-        const detailUrl =
-          basePath + "/ordenes/backorder/detalle?id=" + idCompra;
+        const detailUrl = buildDetailUrl(idCompra);
 
         return `
           <tr>
@@ -213,6 +212,29 @@
 
     if (prevBtn) prevBtn.disabled = !hasPrev;
     if (nextBtn) nextBtn.disabled = !hasNext || !count;
+  }
+
+  function buildDetailUrl(idCompra) {
+    const endpoint = config?.endpoints?.detail || null;
+    const idValue = encodeURIComponent(String(idCompra));
+    if (endpoint && endpoint.includes("{id}")) {
+      return endpoint.replace("{id}", idValue);
+    }
+    if (endpoint) {
+      try {
+        const url = new URL(endpoint, window.location.origin);
+        url.searchParams.set("id", idCompra);
+        return url.toString();
+      } catch (error) {
+        console.warn("Backorders: endpoint de detalle invalido", error);
+      }
+    }
+    return (
+      (typeof basePath !== "undefined" ? basePath : "") +
+      "/ordenes/backorder/" +
+      idValue +
+      "/detalle"
+    );
   }
 
   async function loadBackorders(options) {

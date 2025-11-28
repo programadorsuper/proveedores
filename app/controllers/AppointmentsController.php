@@ -23,29 +23,24 @@ class AppointmentsController extends ProtectedController
             'search' => trim((string)($_GET['search'] ?? '')),
         ];
 
-        $providerIds = $this->context->providerIds();
+        $providerIds  = $this->context->providerIds();
         $isSuperAdmin = !empty($this->user['is_super_admin']);
 
-        // Listado de citas existentes (Postgres)
         $appointments = $this->appointments->listForUser(
             $this->user,
             $providerIds,
             $filters
         );
 
-        // --- Filtros para órdenes nuevas (Firebird) controlados desde el modal ---
-        $selectedStoreId   = (int)($_GET['store_id'] ?? 0);
-        $selectedSeasonType = $_GET['season_type'] ?? ''; // 'special' | 'normal' | ''
+        $selectedStoreId    = (int)($_GET['store_id'] ?? 0);
+        $selectedSeasonType = $_GET['season_type'] ?? '';
 
-        // Catálogo de tiendas de consignación (Firebird)
         $stores = $this->orders->getConsignationStores();
 
         $availableOrders = [];
         if ($selectedStoreId > 0) {
-            // Órdenes ya reservadas en citas "vivas"
             $excludedIds = $this->appointments->reservedDocumentIds('order');
 
-            // Órdenes nuevas por tienda + tipo temporada
             $availableOrders = $this->orders->getNewOrdersForAppointmentsByStoreSeason(
                 $providerIds,
                 [
@@ -58,14 +53,14 @@ class AppointmentsController extends ProtectedController
         }
 
         $this->renderModule('appointments/index', [
-            'title'             => 'Citas de proveedor',
-            'appointments'      => $appointments,
-            'filters'           => $filters,
-            'stores'            => $stores,
-            'selectedStoreId'   => $selectedStoreId,
-            'selectedSeasonType'=> $selectedSeasonType,
-            'availableOrders'   => $availableOrders,
-            'pageScripts'       => ['citas.js'],
+            'title'              => 'Citas de proveedor',
+            'appointments'       => $appointments,
+            'filters'            => $filters,
+            'stores'             => $stores,
+            'selectedStoreId'    => $selectedStoreId,
+            'selectedSeasonType' => $selectedSeasonType,
+            'availableOrders'    => $availableOrders,
+            'pageScripts'        => ['citas.js'],
         ], 'orders');
     }
 
@@ -87,15 +82,60 @@ class AppointmentsController extends ProtectedController
         $this->jsonResponse(['data' => $data]);
     }
 
-    /**
-     * Crear una nueva cita a partir de órdenes seleccionadas (order_ids[]).
-     */
+    public function createDraft(): void
+    {
+        $isAjax = $this->isAjaxRequest();
+        $input  = $_POST;
+
+        $providerId = $this->user['provider_id'] ?? null;
+        if ($providerId === null) {
+            $msg = 'Proveedor no definido para el usuario.';
+            if ($isAjax) {
+                $this->jsonResponse(['success' => false, 'message' => $msg], 422);
+            }
+            $_SESSION['appointments_error'] = $msg;
+            $this->redirectToIndex();
+        }
+
+        $payload = [
+            'provider_id'         => $providerId,
+            'delivery_point_code' => $input['delivery_point_code'] ?? null,
+            'delivery_point_name' => $input['delivery_point_name'] ?? null,
+            'delivery_address'    => $input['delivery_address'] ?? null,
+            'appointment_date'    => $input['appointment_date'] ?? date('Y-m-d'),
+            'slot_start'          => $input['slot_start'] ?? '08:00',
+            'slot_end'            => $input['slot_end'] ?? '09:00',
+        ];
+
+        try {
+            $appointment = $this->appointments->create($payload, [], $this->user);
+            $id          = (int)$appointment['id'];
+            $redirectUrl = ($this->basePath !== '' ? $this->basePath : '') . '/citas/' . $id . '/editar';
+
+            if ($isAjax) {
+                $this->jsonResponse([
+                    'success'      => true,
+                    'id'           => $id,
+                    'redirect_url' => $redirectUrl,
+                ]);
+            }
+
+            header('Location: ' . $redirectUrl);
+            exit;
+        } catch (\Throwable $e) {
+            if ($isAjax) {
+                $this->jsonResponse(['success' => false, 'message' => $e->getMessage()], 422);
+            }
+            $_SESSION['appointments_error'] = $e->getMessage();
+            $this->redirectToIndex();
+        }
+    }
+
     public function store(): void
     {
         $input  = $_POST;
         $isAjax = $this->isAjaxRequest();
 
-        // Órdenes seleccionadas en la tabla
         $orderIds = array_map('intval', $input['order_ids'] ?? []);
 
         if (empty($orderIds)) {
@@ -111,16 +151,13 @@ class AppointmentsController extends ProtectedController
             $providerIds  = $this->context->providerIds();
             $isSuperAdmin = !empty($this->user['is_super_admin']);
 
-            // 1) Cargar las órdenes desde Firebird
             $orders = $this->orders->getOrdenesByIds($orderIds, $providerIds, $isSuperAdmin);
             if (empty($orders)) {
                 throw new RuntimeException('No se encontraron las órdenes seleccionadas.');
             }
 
-            // 2) Validar reglas de negocio: mismo punto de entrega + regla alias S
             $this->validateOrdersForAppointment($orders);
 
-            // 3) Construir arreglo de documentos para Appointments::create
             $documents = [];
             foreach ($orders as $order) {
                 $documents[] = [
@@ -139,7 +176,6 @@ class AppointmentsController extends ProtectedController
                 ];
             }
 
-            // 4) Normalizar delivery_point_* de la cita desde la primera orden, si no viene en el form
             if (!empty($orders)) {
                 $first = $orders[0];
                 if (empty($input['delivery_point_code'])) {
@@ -150,7 +186,6 @@ class AppointmentsController extends ProtectedController
                 }
             }
 
-            // 5) Crear la cita (Postgres)
             $appointment = $this->appointments->create($input, $documents, $this->user);
 
             if ($isAjax) {
@@ -175,11 +210,29 @@ class AppointmentsController extends ProtectedController
         }
     }
 
+    public function edit(int $id): void
+    {
+        $appointment = $this->appointments->findById($id);
+        if (!$appointment) {
+            $_SESSION['appointments_error'] = 'Cita no encontrada.';
+            $this->redirectToIndex();
+        }
+
+        $documents = $this->appointments->getDocumentsForAppointment($id);
+
+        $this->renderModule('appointments/edit', [
+            'title'       => 'Cita ' . ($appointment['folio'] ?? 'CITA-' . $id),
+            'appointment' => $appointment,
+            'documents'   => $documents,
+            'pageScripts' => ['citas-detalles.js'],
+        ], 'orders');
+    }
+
     public function cancel(): void
     {
-        $id      = (int)($_POST['id'] ?? 0);
-        $reason  = trim((string)($_POST['reason'] ?? 'Cancelado por proveedor'));
-        $isAjax  = $this->isAjaxRequest();
+        $id     = (int)($_POST['id'] ?? 0);
+        $reason = trim((string)($_POST['reason'] ?? 'Cancelado por proveedor'));
+        $isAjax = $this->isAjaxRequest();
 
         if ($id <= 0) {
             if ($isAjax) {
@@ -211,11 +264,6 @@ class AppointmentsController extends ProtectedController
         }
     }
 
-    /**
-     * Reglas de negocio de órdenes en una cita:
-     * - Todas del mismo punto de entrega.
-     * - Si alguna es alias S (temporada especial), todas deben ser alias S.
-     */
     protected function validateOrdersForAppointment(array $orders): void
     {
         if (empty($orders)) {
@@ -237,7 +285,10 @@ class AppointmentsController extends ProtectedController
 
         $hasSpecial = false;
         foreach ($orders as $order) {
-            if (strtoupper((string)($order['ALIAS'] ?? '')) === 'S' || (int)($order['ID_TEMPORADA'] ?? 0) === 3) {
+            if (
+                strtoupper((string)($order['ALIAS'] ?? '')) === 'S'
+                || (int)($order['ID_TEMPORADA'] ?? 0) === 3
+            ) {
                 $hasSpecial = true;
                 break;
             }
@@ -245,7 +296,8 @@ class AppointmentsController extends ProtectedController
 
         if ($hasSpecial) {
             foreach ($orders as $order) {
-                if (strtoupper((string)($order['ALIAS'] ?? '')) !== 'S'
+                if (
+                    strtoupper((string)($order['ALIAS'] ?? '')) !== 'S'
                     && (int)($order['ID_TEMPORADA'] ?? 0) !== 3
                 ) {
                     throw new RuntimeException('Si una orden es especial (alias S / temporada 3), todas las órdenes de la cita deben ser especiales.');
@@ -268,29 +320,42 @@ class AppointmentsController extends ProtectedController
         header('Location: ' . $target);
         exit;
     }
-        /**
-     * AJAX: listar órdenes disponibles según tienda + tipo temporada.
-     * URL sugerida: GET /citas/ordenes-disponibles
-     */
+
     public function availableOrdersAjax(): void
     {
-        $isAjax = $this->isAjaxRequest();
-        if (!$isAjax) {
+        if (!$this->isAjaxRequest()) {
             http_response_code(400);
             echo 'Bad request';
             exit;
         }
 
-        $storeId    = (int)($_GET['store_id'] ?? 0);
+        $storeId = (int)($_GET['store_id'] ?? 0);
+        $alias   = isset($_GET['alias']) ? trim((string)$_GET['alias']) : '';
+        $folio   = isset($_GET['folio']) ? (int)($_GET['folio'] ?? 0) : 0;
+        $serie   = isset($_GET['serie']) ? trim((string)$_GET['serie']) : '';
+
         $providerIds  = $this->context->providerIds();
         $isSuperAdmin = !empty($this->user['is_super_admin']);
 
         if ($storeId < 0) {
             $this->jsonResponse([
                 'success' => false,
-                'message' => 'Debes seleccionar tienda y tipo de temporada.',
+                'message' => 'Debes seleccionar una tienda.',
                 'orders'  => [],
             ], 422);
+        }
+
+        $filters = [
+            'store_id' => $storeId,
+        ];
+        if ($alias !== '') {
+            $filters['alias'] = $alias;
+        }
+        if ($folio > 0) {
+            $filters['folio'] = $folio;
+        }
+        if ($serie !== '') {
+            $filters['serie'] = $serie;
         }
 
         try {
@@ -298,9 +363,7 @@ class AppointmentsController extends ProtectedController
 
             $orders = $this->orders->getNewOrdersForAppointmentsByStoreSeason(
                 $providerIds,
-                [
-                    'store_id'    => $storeId,
-                ],
+                $filters,
                 $excludedIds,
                 $isSuperAdmin
             );
@@ -320,12 +383,11 @@ class AppointmentsController extends ProtectedController
 
     /**
      * AJAX: resumen de una orden (cabecera + detalle) para el modal.
-     * URL sugerida: GET /citas/orden-resumen?id_compra=123
+     * GET /citas/orden-resumen?id_compra=123
      */
     public function orderSummaryAjax(): void
     {
-        $isAjax = $this->isAjaxRequest();
-        if (!$isAjax) {
+        if (!$this->isAjaxRequest()) {
             http_response_code(400);
             echo 'Bad request';
             exit;
@@ -343,13 +405,13 @@ class AppointmentsController extends ProtectedController
             $providerIds  = $this->context->providerIds();
             $isSuperAdmin = !empty($this->user['is_super_admin']);
 
-            // Validamos que la orden pertenezca al proveedor, si aplica
-            $orders = $this->orders->getOrdenesByIds([$idCompra], $providerIds, $isSuperAdmin);
+            $orders = $this->orders->getOrdenesByIds2([$idCompra], $providerIds, $isSuperAdmin);
             if (empty($orders)) {
                 throw new RuntimeException('No se encontró la orden o no tienes acceso.');
             }
+
             $header  = $orders[0];
-            $detalle = $this->orders->detallesByOrden($idCompra);
+            $detalle = $this->orders->detallesParaCita($idCompra);
 
             $this->jsonResponse([
                 'success' => true,
@@ -365,85 +427,198 @@ class AppointmentsController extends ProtectedController
     }
 
     /**
-     * AJAX: subir archivos XML/PDF para una orden.
-     * Por ahora solo te dejo el esqueleto; aquí guardarías los archivos en disco
-     * y en una tabla de staging ligada al ID_COMPRA.
-     *
-     * URL sugerida: POST /citas/orden-archivos
-     * Campos:
-     *  - id_compra
-     *  - files[] (input multiple)
+     * AJAX: subir XML/PDF + cantidades capturadas para una orden en una cita.
      */
+
+    // app/controllers/AppointmentsController.php
+
     public function uploadOrderFilesAjax(): void
     {
-        $isAjax = $this->isAjaxRequest();
-        if (!$isAjax) {
+        if (!$this->isAjaxRequest()) {
             http_response_code(400);
             echo 'Bad request';
             exit;
         }
 
-        $idCompra = (int)($_POST['id_compra'] ?? 0);
-        if ($idCompra <= 0) {
+        $idCompra      = (int)($_POST['id_compra'] ?? 0);
+        $appointmentId = (int)($_POST['appointment_id'] ?? 0);
+        $comment       = trim((string)($_POST['comment'] ?? ''));
+
+        if ($idCompra <= 0 || $appointmentId <= 0) {
             $this->jsonResponse([
                 'success' => false,
-                'message' => 'Orden inválida.',
+                'message' => 'Orden o cita inválida.',
             ], 422);
         }
 
-        if (empty($_FILES['files']) || !is_array($_FILES['files']['name'])) {
+        // Items de entrega (vienen del JS como JSON)
+        $deliveryItemsJson = $_POST['delivery_items'] ?? '[]';
+        $deliveryItems     = json_decode($deliveryItemsJson, true);
+        if (!is_array($deliveryItems)) {
+            $deliveryItems = [];
+        }
+
+        // Nombres de inputs que arma el JS
+        $xmlFiles = $_FILES['xml_files'] ?? null;
+        $pdfFiles = $_FILES['pdf_files'] ?? null;
+
+        $hasXml = $xmlFiles && isset($xmlFiles['name']) && is_array($xmlFiles['name']) && count(array_filter($xmlFiles['name'])) > 0;
+        $hasPdf = $pdfFiles && isset($pdfFiles['name']) && is_array($pdfFiles['name']) && count(array_filter($pdfFiles['name'])) > 0;
+
+        if (!$hasXml && !$hasPdf) {
             $this->jsonResponse([
                 'success' => false,
                 'message' => 'Debes seleccionar al menos un archivo XML o PDF.',
             ], 422);
         }
 
-        // TODO: ajusta esta ruta a tu estructura real
-        $baseDir = __DIR__ . '/../../storage/appointments/orders/' . $idCompra;
+        // Raíz del proyecto (app/controllers => subir dos niveles)
+        $projectRoot = dirname(__DIR__, 2);
+        $relativeDir = 'storage/appointments/orders/' . $idCompra;
+        $baseDir     = $projectRoot . '/' . $relativeDir;
+
         if (!is_dir($baseDir)) {
             @mkdir($baseDir, 0775, true);
         }
 
-        $saved = [];
+        $saved  = [
+            'xml' => [],
+            'pdf' => [],
+        ];
         $errors = [];
 
-        $names     = $_FILES['files']['name'];
-        $tmpNames  = $_FILES['files']['tmp_name'];
-        $types     = $_FILES['files']['type'];
-        $sizes     = $_FILES['files']['size'];
-        $errorsArr = $_FILES['files']['error'];
+        // Para no subir duplicados en la misma petición (mismo nombre/tamaño/tipo)
+        $seen = [
+            'xml' => [],
+            'pdf' => [],
+        ];
 
-        foreach ($names as $idx => $filename) {
-            if ((int)$errorsArr[$idx] !== UPLOAD_ERR_OK) {
-                $errors[] = $filename . ' (error de subida)';
-                continue;
+        $processGroup = function (array $bag, string $type) use (
+            &$saved,
+            &$errors,
+            &$seen,
+            $baseDir,
+            $relativeDir
+        ) {
+            $names     = $bag['name'] ?? [];
+            $tmpNames  = $bag['tmp_name'] ?? [];
+            $sizes     = $bag['size'] ?? [];
+            $types     = $bag['type'] ?? [];
+            $errorsArr = $bag['error'] ?? [];
+
+            foreach ($names as $idx => $filename) {
+                if ($filename === null || $filename === '') {
+                    continue;
+                }
+
+                $size = (int)($sizes[$idx] ?? 0);
+                $mime = (string)($types[$idx] ?? '');
+
+                // evitar duplicado dentro de la misma petición
+                $dupKey = $filename . '|' . $size . '|' . $mime;
+                if (in_array($dupKey, $seen[$type], true)) {
+                    $errors[] = $filename . ' (duplicado ignorado)';
+                    continue;
+                }
+                $seen[$type][] = $dupKey;
+
+                $errorCode = (int)($errorsArr[$idx] ?? UPLOAD_ERR_NO_FILE);
+                if ($errorCode !== UPLOAD_ERR_OK) {
+                    $errors[] = $filename . ' (error de subida)';
+                    continue;
+                }
+
+                $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+
+                if ($type === 'xml' && $ext !== 'xml') {
+                    $errors[] = $filename . ' (debe ser XML)';
+                    continue;
+                }
+                if ($type === 'pdf' && $ext !== 'pdf') {
+                    $errors[] = $filename . ' (debe ser PDF)';
+                    continue;
+                }
+
+                $safeOriginal = preg_replace('/[^a-zA-Z0-9_\.\-]/', '_', $filename);
+                $safeName     = date('Ymd_His') . '_' . $safeOriginal;
+                $target       = $baseDir . '/' . $safeName;
+                $storagePath  = $relativeDir . '/' . $safeName;
+
+                if (!move_uploaded_file($tmpNames[$idx], $target)) {
+                    $errors[] = $filename . ' (no se pudo guardar)';
+                    continue;
+                }
+
+                $checksum = null;
+                if (is_readable($target)) {
+                    $checksum = hash_file('sha256', $target);
+                }
+
+                $saved[$type][] = [
+                    'original_name' => $filename,
+                    'storage_path'  => $storagePath, // relativo a la raíz del proyecto
+                    'mime_type'     => $mime,
+                    'size_bytes'    => $size,
+                    'checksum'      => $checksum,
+                ];
             }
+        };
 
-            $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
-            if (!in_array($ext, ['xml', 'pdf'], true)) {
-                $errors[] = $filename . ' (extensión no permitida)';
-                continue;
-            }
-
-            $safeName = date('Ymd_His') . '_' . preg_replace('/[^a-zA-Z0-9_\.-]/', '_', $filename);
-            $target   = $baseDir . '/' . $safeName;
-
-            if (!move_uploaded_file($tmpNames[$idx], $target)) {
-                $errors[] = $filename . ' (no se pudo guardar)';
-                continue;
-            }
-
-            // Aquí podrías guardar en Postgres una fila en appointment_files_temp, por ejemplo
-            // con: id_compra, nombre_archivo, ruta, tipo (xml/pdf), tamaño, etc.
-
-            $saved[] = $safeName;
+        if ($hasXml) {
+            $processGroup($xmlFiles, 'xml');
+        }
+        if ($hasPdf) {
+            $processGroup($pdfFiles, 'pdf');
         }
 
-        $this->jsonResponse([
-            'success' => empty($errors),
-            'saved'   => $saved,
-            'errors'  => $errors,
-        ], empty($errors) ? 200 : 207); // 207 Multi-Status si hubo mezcla
+        try {
+            // 👉 aquí ya usamos el método del modelo con la firma nueva
+            $this->appointments->saveOrderDeliveryFromModal(
+                $appointmentId,
+                $idCompra,
+                $deliveryItems,
+                $saved,
+                $comment,
+                $this->user
+            );
+
+            $this->jsonResponse([
+                'success'        => true,
+                'saved'          => $saved,
+                'errors'         => $errors,
+                'delivery_items' => $deliveryItems,
+                'comment'        => $comment,
+            ]);
+        } catch (\Throwable $e) {
+            $this->jsonResponse([
+                'success' => false,
+                'message' => 'Error al guardar resumen de la orden: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 
+    public function documentsAjax(int $id): void
+    {
+        if (!$this->isAjaxRequest()) {
+            http_response_code(400);
+            echo 'Bad request';
+            exit;
+        }
+
+        $appointment = $this->appointments->findById($id);
+        if (!$appointment) {
+            $this->jsonResponse([
+                'success'   => false,
+                'message'   => 'Cita no encontrada.',
+                'documents' => [],
+            ], 404);
+        }
+
+        $documents = $this->appointments->getDocumentsForAppointment($id);
+
+        $this->jsonResponse([
+            'success'   => true,
+            'documents' => $documents,
+        ]);
+    }
 }

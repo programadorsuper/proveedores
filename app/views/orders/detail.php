@@ -23,8 +23,16 @@ $downloadUrl = static function (string $format) use ($downloadBase, $order): str
     if ($id <= 0 || $downloadBase === '#') {
         return '#';
     }
-    $base = $downloadBase . '?id=' . urlencode($id) . '&format=' . urlencode($format);
-    return $base;
+
+    $idString = (string)$id;
+
+    if (strpos($downloadBase, '{id}') !== false) {
+        $base = str_replace('{id}', rawurlencode($idString), $downloadBase);
+        $separator = strpos($base, '?') === false ? '?' : '&';
+        return $base . $separator . 'format=' . urlencode($format);
+    }
+
+    return $downloadBase . '?id=' . urlencode($idString) . '&format=' . urlencode($format);
 };
 ?>
 

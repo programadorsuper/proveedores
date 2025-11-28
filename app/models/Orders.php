@@ -96,7 +96,6 @@ class Orders
         if (empty($idsCompra)) {
             return [];
         }
-
         // Placeholders para el IN
         $placeholders = implode(', ', array_fill(0, count($idsCompra), '?'));
 
@@ -132,6 +131,7 @@ class Orders
                 CP.TELEFONO_OFICINA,
                 CP.ATENCION,
                 T.NOMBRE_CORTO,
+                TEM.ALIAS,
                 U.NOMBRE || ' ' || U.PATERNO || ' ' || U.MATERNO  AS CAPTURA,
                 UA.NOMBRE || ' ' || UA.PATERNO || ' ' || UA.MATERNO AS AUTORIZA
             FROM TBL_COMPRAS C
@@ -143,6 +143,8 @@ class Orders
                 ON C.ID_PROVEEDOR = CP.ID_PROVEEDOR
             INNER JOIN TBL_TIENDA T
                 ON C.ID_TIENDA = T.ID_TIENDA
+            LEFT JOIN TBL_TEMPORADA TEM
+                ON C.ID_TEMPORADA = TEM.ID_TEMPORADA
             WHERE C.ID_COMPRA IN ($placeholders)
         ";
 
@@ -151,6 +153,107 @@ class Orders
         // Bindeamos todos los IDs como INT
         foreach ($idsCompra as $i => $id) {
             $stmt->bindValue($i + 1, (int)$id, \PDO::PARAM_INT);
+        }
+
+        $stmt->execute();
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC);
+    }
+    /**
+     * Obtener varias órdenes por un arreglo de IDs (IN (...)),
+     * validando proveedor si aplica.
+     *
+     * @param int[] $idsCompra
+     * @param int[] $providerIds
+     * @param bool  $isSuperAdmin
+     * @return array
+     */
+    public function getOrdenesByIds2(
+        array $idsCompra,
+        array $providerIds = [],
+        bool $isSuperAdmin = false
+    ): array {
+        if (empty($idsCompra)) {
+            return [];
+        }
+
+        // Placeholders para el IN de ID_COMPRA
+        $placeholders = implode(', ', array_fill(0, count($idsCompra), '?'));
+
+        $conditions = [];
+        $bindValues = [];
+
+        // IDs de compra obligatorios
+        $conditions[] = "C.ID_COMPRA IN ($placeholders)";
+        foreach ($idsCompra as $id) {
+            $bindValues[] = (int)$id;
+        }
+
+        // Si NO es super admin, filtramos por proveedores
+        $providerIds = array_values(array_unique(array_map('intval', $providerIds)));
+        if (!$isSuperAdmin && !empty($providerIds)) {
+            $provPlaceholders = implode(', ', array_fill(0, count($providerIds), '?'));
+            $conditions[] = "C.ID_PROVEEDOR IN ($provPlaceholders)";
+            foreach ($providerIds as $pid) {
+                $bindValues[] = (int)$pid;
+            }
+        }
+
+        $where = 'WHERE ' . implode(' AND ', $conditions);
+
+        $sql = "
+        SELECT 
+            C.ID_COMPRA,
+            C.SERIE,
+            C.ESTADO,
+            C.FOLIO,
+            C.FECHA,
+            C.IMPORTE,
+            C.DIAS_CREDITO,
+            C.ID_TIENDA_CONSIGNADA,
+            CASE 
+                WHEN C.ID_TIENDA_CONSIGNADA = T.ID_TIENDA THEN
+                    TRIM(T.NOMBRE_CORTO) || ' - ' ||
+                    TRIM(T.CALLE)        || ', ' ||
+                    TRIM(T.COLONIA)      || ', ' ||
+                    TRIM(T.MUNICIPIO)    || ', ' ||
+                    TRIM(T.CODIGO_POSTAL)
+                ELSE
+                    'CENDIS - AV.TEJOCOTES, COL SAN MARTIN OBISPO, 54769'
+            END AS LUGAR_ENTREGA,
+            CP.RAZON_SOCIAL,
+            CP.NUMERO_PROVEEDOR,
+            CP.CALLE,
+            CP.NUMERO_EXTERIOR,
+            CP.NUMERO_INTERIOR,
+            CP.COLONIA,
+            CP.MUNICIPIO,
+            CP.CIUDAD,
+            CP.CODIGO_POSTAL,
+            CP.TELEFONO_OFICINA,
+            CP.ATENCION,
+            T.NOMBRE_CORTO,
+            TEM.ALIAS,
+            U.NOMBRE || ' ' || U.PATERNO || ' ' || U.MATERNO  AS CAPTURA,
+            UA.NOMBRE || ' ' || UA.PATERNO || ' ' || UA.MATERNO AS AUTORIZA
+        FROM TBL_COMPRAS C
+        INNER JOIN TBL_USUARIO U
+            ON C.ID_USUARIO_CAPTURA = U.ID_USUARIO
+        INNER JOIN TBL_USUARIO UA
+            ON C.ID_USUARIO_AUTORIZA = UA.ID_USUARIO
+        INNER JOIN TBL_COMPRAS_PROVEEDORES CP
+            ON C.ID_PROVEEDOR = CP.ID_PROVEEDOR
+        INNER JOIN TBL_TIENDA T
+            ON C.ID_TIENDA = T.ID_TIENDA
+        LEFT JOIN TBL_TEMPORADA TEM
+            ON C.ID_TEMPORADA = TEM.ID_TEMPORADA
+        {$where}
+    ";
+
+        $stmt = $this->db->prepare($sql);
+
+        // Bind posicional
+        foreach ($bindValues as $i => $value) {
+            $stmt->bindValue($i + 1, $value, \PDO::PARAM_INT);
         }
 
         $stmt->execute();
@@ -663,21 +766,21 @@ class Orders
 
                 // Nombre proveedor
                 $orParts[]  = "CP.RAZON_SOCIAL LIKE ?";
-                $bindValues[] = '%'.$term.'%';
+                $bindValues[] = '%' . $term . '%';
 
                 // // Nombre tienda
                 $orParts[]  = "T.NOMBRE_CORTO LIKE ?";
-                $bindValues[] = '%'.$term.'%';
+                $bindValues[] = '%' . $term . '%';
 
                 // Temporada y alias
                 $orParts[]  = "TEM.TEMPORADA LIKE ?";
-                $bindValues[] = '%'.$term.'%';
+                $bindValues[] = '%' . $term . '%';
 
                 // $orParts[]  = "TEM.ALIAS LIKE ?";
                 // $bindValues[] = '%'.$term.'%';
 
                 $orParts[]   = "CP.NUMERO_PROVEEDOR LIKE ?";
-                $bindValues[] = '%'.$term.'%';
+                $bindValues[] = '%' . $term . '%';
 
                 // Cada palabra genera un grupo ( ... ) y todos los grupos se AND-ean
                 $conditions[] = '(' . implode(' OR ', $orParts) . ')';
@@ -722,23 +825,29 @@ class Orders
             C.FECHA,
             CP.RAZON_SOCIAL,
             CP.NUMERO_PROVEEDOR,
-            T.NOMBRE_CORTO
+            T.NOMBRE_CORTO,
+            C.ID_TIENDA_CONSIGNADA,
+            T.ID_TIENDA,
+            T.CALLE,
+            T.COLONIA,
+            T.MUNICIPIO,
+            T.CODIGO_POSTAL
         HAVING
             SUM(COALESCE(EDET.CANTIDAD_RECIBIDA, 0)) < SUM(CD.CANTIDAD_SOLICITADA)
             -- Si quieres que solo salgan compras con algo recibido, descomenta la siguiente línea:
             -- AND SUM(COALESCE(EDET.CANTIDAD_RECIBIDA, 0)) > 0
-    ";
+        ";
 
         // ===========================
         // 1) TOTAL DE REGISTROS
         // ===========================
         $sqlTotal = "
-        SELECT COUNT(*) AS TOTAL
-        FROM (
-            SELECT C.ID_COMPRA
-            {$fromGroupHaving}
-        ) X
-    ";
+            SELECT COUNT(*) AS TOTAL
+            FROM (
+                SELECT C.ID_COMPRA
+                {$fromGroupHaving}
+            ) X
+        ";
 
         $stmtTotal = $this->db->prepare($sqlTotal);
 
@@ -766,7 +875,17 @@ class Orders
                 CP.NUMERO_PROVEEDOR,
                 T.NOMBRE_CORTO,
                 SUM(CD.CANTIDAD_SOLICITADA) AS TOTAL_SOLICITADO,
-                SUM(COALESCE(EDET.CANTIDAD_RECIBIDA, 0)) AS TOTAL_RECIBIDO
+                SUM(COALESCE(EDET.CANTIDAD_RECIBIDA, 0)) AS TOTAL_RECIBIDO,
+                CASE 
+                    WHEN C.ID_TIENDA_CONSIGNADA = T.ID_TIENDA THEN
+                        TRIM(T.NOMBRE_CORTO) || ' - ' ||
+                        TRIM(T.CALLE)        || ', ' ||
+                        TRIM(T.COLONIA)      || ', ' ||
+                        TRIM(T.MUNICIPIO)    || ', ' ||
+                        TRIM(T.CODIGO_POSTAL)
+                    ELSE
+                        'CENDIS - AV.TEJOCOTES, COL SAN MARTIN OBISPO, 54769'
+                END AS LUGAR_ENTREGA
             {$fromGroupHaving}
             ORDER BY C.FECHA DESC
             ROWS {$rowStart} TO {$rowEnd}
@@ -883,6 +1002,51 @@ class Orders
 
         return $stmt->fetchAll(\PDO::FETCH_ASSOC);
     }
+    /**
+     * Detalle de una orden para la CITA:
+     * - Si la orden NO tiene entradas → orden NUEVA → devuelve TODOS los renglones.
+     * - Si YA tiene entradas → BACKORDER → devuelve SOLO lo pendiente.
+     *
+     * Cada renglón incluye:
+     *  - QTY_REQUESTED  (solicitada)
+     *  - QTY_RECEIVED   (recibida en almacén)
+     *  - QTY_PENDING    (faltante)
+     *  - QTY_TO_DELIVER (a entregar en esta cita, por defecto = faltante)
+     */
+    public function detallesParaCita(int $idCompra): array
+    {
+        // Detalle original de la compra
+        $items = $this->detallesByOrden($idCompra);
+
+        // Cantidades recibidas por artículo (todas las entradas)
+        $receivedMap = $this->getReceivedQuantities($idCompra);
+
+        // Entradas de almacén: si hay → es backorder
+        $entries = $this->getEntradasAlmacen($idCompra);
+        $isNewOrder = empty($entries);
+
+        $lines = [];
+        foreach ($items as $row) {
+            $idArt     = (int)($row['ID_ARTICULO'] ?? 0);
+            $requested = (float)($row['CANTIDAD_SOLICITADA'] ?? 0);
+            $received  = (float)($receivedMap[$idArt] ?? 0);
+            $pending   = max($requested - $received, 0);
+
+            // Si es BACKORDER y ya no hay nada pendiente de este artículo → no lo incluimos
+            if (!$isNewOrder && $pending <= 0) {
+                continue;
+            }
+
+            $row['QTY_REQUESTED']  = $requested;
+            $row['QTY_RECEIVED']   = $received;
+            $row['QTY_PENDING']    = $pending;
+            $row['QTY_TO_DELIVER'] = $pending; // por defecto, se propone entregar lo pendiente
+
+            $lines[] = $row;
+        }
+
+        return $lines;
+    }
 
     public function getEntradasAlmacen(int $idCompra): array
     {
@@ -968,13 +1132,36 @@ class Orders
             "COM.ID_USUARIO_AUTORIZA IS NOT NULL",
             "COM.ID_USUARIO_AUTORIZA <> 0",
             "CAST(LEFT(COM.FECHA, 10) AS DATE) >= :from_date",
-            "ENT.ID_ORDEN_ENTRADA IS NULL",
             "COALESCE(COM.ID_TIENDA_CONSIGNADA, 0) = :store_id",
+            // Nuevas (sin entrada) o backorders (entrada parcial)
+            "(ENT.ID_ORDEN_ENTRADA IS NULL
+          OR (ENT.ID_ORDEN_ENTRADA IS NOT NULL
+              AND COALESCE(BO.TOTAL_RECIBIDO, 0) < COALESCE(BO.TOTAL_SOLICITADO, 0)))",
         ];
+
         $params = [
             ':from_date' => $fromDate,
             ':store_id'  => $storeId,
         ];
+
+        // --- Filtros opcionales por alias, folio y serie --- //
+        $alias = isset($filters['alias']) ? trim((string)$filters['alias']) : '';
+        if ($alias !== '') {
+            $conditions[] = 'COALESCE(TEM.ALIAS, \'\') = :alias';
+            $params[':alias'] = $alias;
+        }
+
+        $folio = isset($filters['folio']) ? (int)$filters['folio'] : 0;
+        if ($folio > 0) {
+            $conditions[] = 'COM.FOLIO = :folio';
+            $params[':folio'] = $folio;
+        }
+
+        $serie = isset($filters['serie']) ? trim((string)$filters['serie']) : '';
+        if ($serie !== '') {
+            $conditions[] = 'COM.SERIE = :serie';
+            $params[':serie'] = $serie;
+        }
 
         // Filtrar por proveedor si no es super admin
         $providerIds = array_values(array_unique(array_map('intval', $providerIds)));
@@ -991,71 +1178,138 @@ class Orders
         $where = 'WHERE ' . implode(' AND ', $conditions);
 
         $sql = "
+        SELECT
+            COM.ID_COMPRA,
+            COM.SERIE,
+            COM.ESTADO,
+            COM.ID_TEMPORADA,
+            TEM.ALIAS,
+            TEM.TEMPORADA,
+            COM.FOLIO,
+            COM.FECHA,
+            COM.IMPORTE,
+            COM.IMPUESTOS_TRASLADADOS,
+            COM.IMPUESTOS_TRASLADADOS_2,
+            COM.DESCUENTO_1,
+            COM.DESCUENTO_2,
+            COM.DESCUENTO_3,
+            COM.TOTAL,
+            COM.DIAS_CREDITO,
+            COALESCE(COM.ID_TIENDA_CONSIGNADA, 0) AS ID_TIENDA_CONSIGNADA,
+            COM.ID_PROVEEDOR,
+            ENT.ID_ORDEN_ENTRADA,
+            -- Totales de backorder (pueden ser 0 para órdenes nuevas sin entrada)
+            COALESCE(BO.TOTAL_SOLICITADO, 0) AS TOTAL_SOLICITADO,
+            COALESCE(BO.TOTAL_RECIBIDO, 0)   AS TOTAL_RECIBIDO,
+            CASE
+                WHEN COALESCE(BO.TOTAL_SOLICITADO, 0) > COALESCE(BO.TOTAL_RECIBIDO, 0)
+                    THEN COALESCE(BO.TOTAL_SOLICITADO, 0) - COALESCE(BO.TOTAL_RECIBIDO, 0)
+                ELSE 0
+            END AS PENDING_TOTAL,
+            CASE
+                WHEN COALESCE(BO.TOTAL_SOLICITADO, 0) > 0
+                    THEN ROUND((COALESCE(BO.TOTAL_RECIBIDO, 0) / BO.TOTAL_SOLICITADO) * 100, 2)
+                ELSE 0
+            END AS PERCENT_RECEIVED,
+            CP.RAZON_SOCIAL,
+            CP.NUMERO_PROVEEDOR,
+            CP.CALLE,
+            CP.NUMERO_EXTERIOR,
+            CP.NUMERO_INTERIOR,
+            CP.COLONIA,
+            CP.MUNICIPIO,
+            CP.CIUDAD,
+            CP.CODIGO_POSTAL,
+            CP.TELEFONO_OFICINA,
+            CP.ATENCION,
+            TIE.NOMBRE_CORTO,
+            CASE
+                WHEN COM.ID_TIENDA_CONSIGNADA = TIE.ID_TIENDA THEN
+                    TRIM(TIE.NOMBRE_CORTO) || ' - ' ||
+                    TRIM(TIE.CALLE)        || ', ' ||
+                    TRIM(TIE.COLONIA)      || ', ' ||
+                    TRIM(TIE.MUNICIPIO)    || ', ' ||
+                    TRIM(TIE.CODIGO_POSTAL)
+                ELSE
+                    'CENDIS - AV.TEJOCOTES, COL SAN MARTIN OBISPO, 54769'
+            END AS LUGAR_ENTREGA,
+            U.NOMBRE  || ' ' || U.PATERNO  || ' ' || U.MATERNO  AS CAPTURA,
+            UA.NOMBRE || ' ' || UA.PATERNO || ' ' || UA.MATERNO AS AUTORIZA
+        FROM TBL_COMPRAS COM
+
+        -- 🔹 AQUÍ VIENE EL CAMBIO IMPORTANTE: agregamos ENT como subconsulta agrupada
+        LEFT JOIN (
             SELECT
-                COM.ID_COMPRA,
-                COM.SERIE,
-                COM.ESTADO,
-                COM.ID_TEMPORADA,
-                TEM.ALIAS,
-                TEM.TEMPORADA,
-                COM.FOLIO,
-                COM.FECHA,
-                COM.IMPORTE,
-                COM.IMPUESTOS_TRASLADADOS,
-                COM.IMPUESTOS_TRASLADADOS_2,
-                COM.DESCUENTO_1,
-                COM.DESCUENTO_2,
-                COM.DESCUENTO_3,
-                COM.TOTAL,
-                COM.DIAS_CREDITO,
-                COALESCE(COM.ID_TIENDA_CONSIGNADA, 0) AS ID_TIENDA_CONSIGNADA,
-                COM.ID_PROVEEDOR,
-                CASE
-                    WHEN COM.ID_TIENDA_CONSIGNADA = TIE.ID_TIENDA THEN
-                        TRIM(TIE.NOMBRE_CORTO) || ' - ' ||
-                        TRIM(TIE.CALLE)        || ', ' ||
-                        TRIM(TIE.COLONIA)      || ', ' ||
-                        TRIM(TIE.MUNICIPIO)    || ', ' ||
-                        TRIM(TIE.CODIGO_POSTAL)
-                    ELSE
-                        'CENDIS - AV.TEJOCOTES, COL SAN MARTIN OBISPO, 54769'
-                END AS LUGAR_ENTREGA,
-                CP.RAZON_SOCIAL,
-                CP.NUMERO_PROVEEDOR,
-                CP.CALLE,
-                CP.NUMERO_EXTERIOR,
-                CP.NUMERO_INTERIOR,
-                CP.COLONIA,
-                CP.MUNICIPIO,
-                CP.CIUDAD,
-                CP.CODIGO_POSTAL,
-                CP.TELEFONO_OFICINA,
-                CP.ATENCION,
-                TIE.NOMBRE_CORTO,
-                U.NOMBRE  || ' ' || U.PATERNO  || ' ' || U.MATERNO  AS CAPTURA,
-                UA.NOMBRE || ' ' || UA.PATERNO || ' ' || UA.MATERNO AS AUTORIZA
-            FROM TBL_COMPRAS COM
-            LEFT JOIN TBL_ENTRADA_ALMACEN ENT
-                ON COM.ID_COMPRA = ENT.ID_COMPRA
-            INNER JOIN TBL_COMPRAS_PROVEEDORES CP
-                ON COM.ID_PROVEEDOR = CP.ID_PROVEEDOR
-            LEFT JOIN TBL_TIENDA TIE
-                ON COM.ID_TIENDA = TIE.ID_TIENDA
-            LEFT JOIN TBL_TEMPORADA TEM
-                ON COM.ID_TEMPORADA = TEM.ID_TEMPORADA
-            INNER JOIN TBL_USUARIO U
-                ON COM.ID_USUARIO_CAPTURA = U.ID_USUARIO
-            INNER JOIN TBL_USUARIO UA
-                ON COM.ID_USUARIO_AUTORIZA = UA.ID_USUARIO
-            $where
-            ORDER BY COM.FECHA DESC, COM.ID_COMPRA DESC
-        ";
+                ID_COMPRA,
+                MIN(ID_ORDEN_ENTRADA) AS ID_ORDEN_ENTRADA
+            FROM TBL_ENTRADA_ALMACEN
+            GROUP BY ID_COMPRA
+        ) ENT
+            ON COM.ID_COMPRA = ENT.ID_COMPRA
+
+        -- Subconsulta de backorder por compra (totales solicitados/recibidos)
+        LEFT JOIN (
+            SELECT
+                CD.ID_COMPRA,
+                SUM(CD.CANTIDAD_SOLICITADA) AS TOTAL_SOLICITADO,
+                SUM(COALESCE(EDET.CANTIDAD_RECIBIDA, 0)) AS TOTAL_RECIBIDO
+            FROM TBL_COMPRAS_DETALLE CD
+            LEFT JOIN TBL_ENTRADA_ALMACEN E
+                ON E.ID_COMPRA = CD.ID_COMPRA
+            LEFT JOIN TBL_ENTRADA_ALMACEN_DETALLE EDET
+                ON EDET.ID_ORDEN_ENTRADA = E.ID_ORDEN_ENTRADA
+               AND EDET.ID_ARTICULO = CD.ID_ARTICULO
+            GROUP BY CD.ID_COMPRA
+        ) BO
+            ON BO.ID_COMPRA = COM.ID_COMPRA
+
+        INNER JOIN TBL_COMPRAS_PROVEEDORES CP
+            ON COM.ID_PROVEEDOR = CP.ID_PROVEEDOR
+        LEFT JOIN TBL_TIENDA TIE
+            ON COM.ID_TIENDA = TIE.ID_TIENDA
+        LEFT JOIN TBL_TEMPORADA TEM
+            ON COM.ID_TEMPORADA = TEM.ID_TEMPORADA
+        INNER JOIN TBL_USUARIO U
+            ON COM.ID_USUARIO_CAPTURA = U.ID_USUARIO
+        INNER JOIN TBL_USUARIO UA
+            ON COM.ID_USUARIO_AUTORIZA = UA.ID_USUARIO
+        $where
+        ORDER BY COM.FECHA DESC, COM.ID_COMPRA DESC
+    ";
 
         $stmt = $this->db->prepare($sql);
         $this->bindFilterParams($stmt, $params);
         $stmt->execute();
 
         $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+
+        // Clasificar cada orden: NUEVA / BACKORDER + porcentajes “que faltan”
+        foreach ($rows as &$row) {
+            $ordered  = (float)($row['TOTAL_SOLICITADO'] ?? 0);
+            $received = (float)($row['TOTAL_RECIBIDO'] ?? 0);
+            $pending  = max($ordered - $received, 0.0);
+
+            $row['TOTAL_SOLICITADO'] = $ordered;
+            $row['TOTAL_RECIBIDO']   = $received;
+            $row['PENDING_TOTAL']    = $pending;
+
+            if (empty($row['ID_ORDEN_ENTRADA'])) {
+                $row['ORDER_KIND']        = 'NUEVA';
+                $row['PERCENT_RECEIVED']  = 0.0;
+                $row['PERCENT_PENDING']   = $ordered > 0 ? 100.0 : 0.0;
+            } else {
+                $row['ORDER_KIND'] = 'BACKORDER';
+                if ($ordered > 0) {
+                    $percentReceived = round(($received / $ordered) * 100, 2);
+                    $row['PERCENT_RECEIVED'] = $percentReceived;
+                    $row['PERCENT_PENDING']  = max(100.0 - $percentReceived, 0.0);
+                } else {
+                    $row['PERCENT_RECEIVED'] = 0.0;
+                    $row['PERCENT_PENDING']  = 0.0;
+                }
+            }
+        }
+        unset($row);
 
         // Excluir órdenes ya reservadas
         if (!empty($excludedIds)) {
@@ -1067,9 +1321,17 @@ class Orders
 
         return array_values($rows);
     }
+
+
     public function getConsignationStores(): array
     {
-        $sql  = "SELECT ID_TIENDA, NOMBRE_CORTO FROM TBL_TIENDA ORDER BY NOMBRE_CORTO";
+        $sql  = "SELECT 
+                    ID_TIENDA,
+                    TRIM(NOMBRE_CORTO) AS NOMBRE_CORTO
+                FROM TBL_TIENDA
+                WHERE ID_TIENDA NOT IN (9, 11)
+                ORDER BY TRIM(NOMBRE_CORTO);
+                ";
         $stmt = $this->db->prepare($sql);
         $stmt->execute();
 

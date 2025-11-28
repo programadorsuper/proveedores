@@ -48,22 +48,28 @@ $router->add($prefix . '/ordenes', 'OrdersController@index', 'GET', true);
 $router->add($prefix . '/ordenes/nuevas', 'OrdersController@nuevas', 'GET', true);
 $router->add($prefix . '/ordenes/backorder', 'OrdersController@backorder', 'GET', true);
 $router->add($prefix . '/ordenes/backorder/api', 'OrdersController@backordersJson', 'GET', true);
-$router->add($prefix . '/ordenes/backorder/detalle', 'OrdersController@detalleBackorder', 'GET', true);
+$router->add($prefix . '/ordenes/backorder/{id}/detalle', 'OrdersController@detalleBackorder', 'GET', true);
 $router->add($prefix . '/ordenes/entradas', 'OrdersController@entradas', 'GET', true);
-$router->add($prefix . '/ordenes/detalle', 'OrdersController@detalle', 'GET', true);
+$router->add($prefix . '/ordenes/{id}/detalle', 'OrdersController@detalle', 'GET', true);
 $router->add($prefix . '/ordenes/listar', 'OrdersController@listOrders', 'GET', true);
 $router->add($prefix . '/ordenes/marcar-vista', 'OrdersController@markViewed', 'POST', true);
-$router->add($prefix . '/ordenes/exportar', 'OrdersController@export', 'GET', true);
+$router->add($prefix . '/ordenes/{id}/exportar', 'OrdersController@export', 'GET', true);
 $router->add($prefix . '/ordenes/nuevas/check', 'OrdersController@checkNew', 'GET', true);
 
 $router->add($prefix . '/citas', 'AppointmentsController@index', 'GET', true);
 $router->add($prefix . '/citas/listar', 'AppointmentsController@list', 'GET', true);
 $router->add($prefix . '/citas/crear', 'AppointmentsController@store', 'POST', true);
 $router->add($prefix . '/citas/cancelar', 'AppointmentsController@cancel', 'POST', true);
+$router->add($prefix . '/citas/{id}/editar', 'AppointmentsController@edit', 'GET', true);
 
+// AJAX
 $router->add($prefix . '/citas/ordenes-disponibles', 'AppointmentsController@availableOrdersAjax', 'GET', true);
 $router->add($prefix . '/citas/orden-resumen', 'AppointmentsController@orderSummaryAjax', 'GET', true);
 $router->add($prefix . '/citas/orden-archivos', 'AppointmentsController@uploadOrderFilesAjax', 'POST', true);
+$router->add($prefix . '/citas/{id}/documentos', 'AppointmentsController@documentsAjax', 'GET', true);
+
+$router->add($prefix . '/citas/crear-borrador-cita', 'AppointmentsController@createDraft', 'POST', true);
+
 
 
 $router->add($prefix . '/exportaciones', 'ExportsController@index', 'GET', true);

@@ -332,8 +332,11 @@
     if (!config.endpoints.export) {
       return;
     }
-    const url = new URL(config.endpoints.export, window.location.origin);
-    url.searchParams.set("id", orderId);
+    const exportBase = buildEndpointWithId(config.endpoints.export, orderId);
+    if (!exportBase || exportBase === "#") {
+      return;
+    }
+    const url = new URL(exportBase, window.location.origin);
     url.searchParams.set("format", format);
 
     markOrder(orderId, providerId, { refresh: true, silent: true })
@@ -436,10 +439,18 @@
   }
 
   function buildDetailUrl(orderId) {
-    if (!config.endpoints.detail) {
+    return buildEndpointWithId(config.endpoints.detail, orderId);
+  }
+
+  function buildEndpointWithId(endpoint, orderId) {
+    if (!endpoint) {
       return "#";
     }
-    const url = new URL(config.endpoints.detail, window.location.origin);
+    const idValue = encodeURIComponent(String(orderId));
+    if (endpoint.includes("{id}")) {
+      return endpoint.replace("{id}", idValue);
+    }
+    const url = new URL(endpoint, window.location.origin);
     url.searchParams.set("id", orderId);
     return url.toString();
   }

@@ -36,6 +36,9 @@ class Router
 
         $uri = '/' . ltrim($uri, '/');
         $uri = rtrim($uri, '/');
+        if ($uri === '') {
+            $uri = '/';
+        }
 
         foreach ($this->routes as $route) {
             $routeUri = $route['uri'];
@@ -44,8 +47,16 @@ class Router
             }
             $routeUri = '/' . ltrim($routeUri, '/');
             $routeUri = rtrim($routeUri, '/');
+            if ($routeUri === '') {
+                $routeUri = '/';
+            }
 
-            if ($route['method'] === $requestMethod && $routeUri === $uri) {
+            if ($route['method'] !== $requestMethod) {
+                continue;
+            }
+
+            $pattern = $this->buildPattern($routeUri);
+            if (preg_match($pattern, $uri, $matches)) {
                 [$controller, $action] = explode('@', $route['action']);
                 require_once __DIR__ . '/../controllers/' . $controller . '.php';
                 $controllerObj = new $controller();
@@ -54,12 +65,45 @@ class Router
                     AuthManager::requireAuth(true);
                 }
 
-                call_user_func([$controllerObj, $action]);
+                $params = $this->extractParams($matches);
+                call_user_func_array([$controllerObj, $action], $params);
                 return;
             }
         }
 
         http_response_code(404);
         echo '404 Not Found';
+    }
+
+    private function buildPattern(string $routeUri): string
+    {
+        $routeUri = $routeUri === '' ? '/' : $routeUri;
+        $routeUri = '/' . ltrim($routeUri, '/');
+        $routeUri = rtrim($routeUri, '/');
+        if ($routeUri === '') {
+            $routeUri = '/';
+        }
+
+        $escaped = preg_quote($routeUri, '#');
+        $pattern = preg_replace('#\\\\\{([a-zA-Z0-9_]+)\\\\\}#', '(?P<$1>[^/]+)', $escaped);
+
+        return '#^' . $pattern . '$#';
+    }
+
+    private function extractParams(array $matches): array
+    {
+        if (empty($matches)) {
+            return [];
+        }
+
+        $params = array_filter(
+            $matches,
+            static function ($key) {
+                return !is_int($key);
+            },
+            ARRAY_FILTER_USE_KEY
+        );
+
+        return array_values($params);
     }
 }
